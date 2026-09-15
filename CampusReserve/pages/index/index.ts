@@ -1,52 +1,133 @@
 /**
  * 首页。
  *
- * Phase 1：建立页面骨架与到其余核心页面的真实路由入口。
- * Phase 2：在此实现顶部区域、分类入口、热门/推荐资源、下拉刷新等服务端数据展示。
+ * Phase 2 实现：顶部区域、分类入口、热门资源、推荐资源、四态展示与下拉刷新。
+ * 数据经由 `services/resource.ts` 获取（调用链 Page → Service → API，技术设计 §5），
+ * 后端业务 API 落地前由 services/config.ts 的 `USE_MOCK_DATA` 切到本地数据源。
+ *
+ * 状态约定（技术设计 §7）：资源区始终处于 loading / success / empty / error 之一，
+ * 任何分支都不会停留在 loading，也不会白屏；顶部区域与分类入口为静态内容，
+ * 即使接口失败也保持可点击，保证首页可用。
  */
-interface NavEntry {
-  /** 入口标题 */
-  title: string
-  /** 入口说明 */
-  desc: string
-  /** 目标页面路径（含参数） */
-  url: string
-}
+import { getResources } from '../../services/resource'
+import { ApiError } from '../../services/request'
+import { RESOURCE_TYPE_OPTIONS } from '../../utils/resource'
+import type { PageState } from '../../types/page'
+import type { Resource } from '../../types/resource'
+
+/** 「热门资源」展示条数，其余进入「推荐资源」 */
+const HOT_LIMIT = 4
+
+/** 首页一次拉取的资源条数（热门 + 推荐） */
+const FETCH_LIMIT = 8
+
+/** 兜底错误文案，非 ApiError 时使用 */
+const FALLBACK_ERROR = '资源加载失败，请稍后重试'
 
 Page({
   data: {
+    /** 顶部区域文案 */
     projectName: 'CampusReserve',
-    description: '校园场地预约小程序',
-    navEntries: [
-      {
-        title: '资源列表',
-        desc: '按类型筛选自习室 / 研讨室 / 摄影棚 / 球场',
-        url: '/pages/resource-list/resource-list',
-      },
-      {
-        title: '资源详情',
-        desc: '查看资源信息与可用时间段（示例 id=1）',
-        url: '/pages/resource-detail/resource-detail?id=1',
-      },
-      {
-        title: '我的预约',
-        desc: '查看待使用 / 已完成 / 已取消的预约',
-        url: '/pages/my-bookings/my-bookings',
-      },
-      {
-        title: '预约详情',
-        desc: '查看单条预约详情（示例 id=1）',
-        url: '/pages/booking-detail/booking-detail?id=1',
-      },
-    ] as NavEntry[],
+    slogan: '校园场地预约',
+    /** 分类入口，来自资源类型常量，顺序即展示顺序 */
+    categories: RESOURCE_TYPE_OPTIONS,
+
+    /** 资源区状态 */
+    pageState: 'loading' as PageState,
+    /** 错误提示，pageState 为 error 时展示 */
+    errorMessage: '',
+    /** 热门资源 */
+    hotResources: [] as Resource[],
+    /** 推荐资源 */
+    recommendResources: [] as Resource[],
   },
 
-  /** 统一导航处理，目标路径由 data-url 提供 */
-  onNavigate(e: WechatMiniprogram.TouchEvent) {
-    const url = e.currentTarget.dataset.url as string | undefined
-    if (!url) {
+  onLoad() {
+    this.loadResources()
+  },
+
+  /**
+   * 加载首页资源。
+   * 四态由本方法统一维护：成功落到 success / empty，失败落到 error，不存在无限 loading。
+   */
+  async loadResources() {
+    this.setData({ pageState: 'loading', errorMessage: '' })
+
+    try {
+      const list = await getResources({ limit: FETCH_LIMIT })
+      this.renderResources(list)
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : FALLBACK_ERROR
+      this.setData({
+        pageState: 'error',
+        errorMessage: message,
+        hotResources: [],
+        recommendResources: [],
+      })
+    }
+  },
+
+  /**
+   * 渲染资源列表。
+   *
+   * 热门 / 推荐为前端临时划分：前 `HOT_LIMIT` 条为热门，其余为推荐。
+   * `docs/05_api_contract.md` 确定后，若后端提供独立的热门 / 推荐语义（独立接口或排序字段），
+   * 只需调整本方法，页面结构与组件无需改动。
+   */
+  renderResources(list: Resource[]) {
+    if (list.length === 0) {
+      this.setData({ pageState: 'empty', hotResources: [], recommendResources: [] })
       return
     }
+
+    this.setData({
+      pageState: 'success',
+      hotResources: list.slice(0, HOT_LIMIT),
+      recommendResources: list.slice(HOT_LIMIT),
+    })
+  },
+
+  /** 下拉刷新：重新拉取数据，完成后必须收起刷新动画 */
+  async onPullDownRefresh() {
+    await this.loadResources()
+    wx.stopPullDownRefresh()
+  },
+
+  /** error-state 的重试事件与 empty-state 的操作事件共用 */
+  onRetry() {
+    this.loadResources()
+  },
+
+  /** 分类入口：进入资源列表并带上分类参数 */
+  onTapCategory(e: WechatMiniprogram.TouchEvent) {
+    const category = e.currentTarget.dataset.category as string | undefined
+    if (!category) {
+      return
+    }
+    this.navigate(`/pages/resource-list/resource-list?category=${category}`)
+  },
+
+  /** 资源卡片点击：进入资源详情 */
+  onTapResource(e: WechatMiniprogram.CustomEvent<{ resource: Resource }>) {
+    const resource = e.detail.resource
+    if (!resource || !resource.id) {
+      return
+    }
+    this.navigate(`/pages/resource-detail/resource-detail?id=${resource.id}`)
+  },
+
+  /** 顶部「我的预约」入口 */
+  onOpenMyBookings() {
+    this.navigate('/pages/my-bookings/my-bookings')
+  },
+
+  /** 「查看全部」入口：进入资源列表（不限定分类） */
+  onOpenAllResources() {
+    this.navigate('/pages/resource-list/resource-list')
+  },
+
+  /** 统一的页面跳转，失败时给出提示而不是静默无反馈 */
+  navigate(url: string) {
     wx.navigateTo({
       url,
       fail: () => {

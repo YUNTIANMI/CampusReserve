@@ -1,0 +1,88 @@
+/* 自定义组件默认样式隔离，仅 CSS 自定义属性可从 page 继承，故此处全部带 var 回退值。 */
+.resource-card {
+  display: flex;
+  align-items: center;
+  padding: var(--cr-space-md, 24rpx);
+  margin-bottom: var(--cr-space-sm, 16rpx);
+  background-color: var(--cr-color-surface, #ffffff);
+  border-radius: var(--cr-radius-md, 16rpx);
+}
+
+.resource-card:last-child {
+  margin-bottom: 0;
+}
+
+.resource-card--hover {
+  background-color: var(--cr-color-hover, #f2f3f5);
+}
+
+.resource-card__thumb {
+  flex: none;
+  width: 160rpx;
+  height: 160rpx;
+  overflow: hidden;
+  background-color: var(--cr-color-bg, #f5f6f8);
+  border-radius: var(--cr-radius-sm, 8rpx);
+}
+
+.resource-card__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.resource-card__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: var(--cr-font-sm, 26rpx);
+  color: var(--cr-color-text-muted, #8f959e);
+}
+
+.resource-card__body {
+  flex: 1;
+  min-width: 0;
+  margin-left: var(--cr-space-md, 24rpx);
+}
+
+.resource-card__name {
+  overflow: hidden;
+  font-size: var(--cr-font-md, 28rpx);
+  font-weight: 600;
+  color: var(--cr-color-text, #1f2329);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.resource-card__meta {
+  display: flex;
+  align-items: center;
+  margin-top: 12rpx;
+}
+
+.resource-card__tag {
+  height: 36rpx;
+  padding: 0 12rpx;
+  font-size: var(--cr-font-xs, 22rpx);
+  line-height: 36rpx;
+  color: var(--cr-color-primary, #2f6bff);
+  background-color: rgba(47, 107, 255, 0.08);
+  border-radius: 6rpx;
+}
+
+.resource-card__capacity {
+  margin-left: 12rpx;
+  font-size: var(--cr-font-sm, 26rpx);
+  color: var(--cr-color-text-secondary, #646a73);
+}
+
+.resource-card__location {
+  margin-top: 12rpx;
+  overflow: hidden;
+  font-size: var(--cr-font-sm, 26rpx);
+  color: var(--cr-color-text-muted, #8f959e);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

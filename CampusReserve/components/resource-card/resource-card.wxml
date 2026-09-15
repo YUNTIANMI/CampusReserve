@@ -1,0 +1,25 @@
+<view
+  class="resource-card"
+  hover-class="resource-card--hover"
+  hover-stay-time="80"
+  bindtap="handleTap"
+>
+  <view class="resource-card__thumb">
+    <image
+      class="resource-card__image"
+      wx:if="{{resource && resource.imageUrl}}"
+      src="{{resource.imageUrl}}"
+      mode="aspectFill"
+    />
+    <view class="resource-card__placeholder" wx:else>{{typeLabel}}</view>
+  </view>
+
+  <view class="resource-card__body">
+    <view class="resource-card__name">{{resource.name}}</view>
+    <view class="resource-card__meta">
+      <text class="resource-card__tag">{{typeLabel}}</text>
+      <text class="resource-card__capacity">可容纳 {{resource.capacity}} 人</text>
+    </view>
+    <view class="resource-card__location">{{resource.location}}</view>
+  </view>
+</view>

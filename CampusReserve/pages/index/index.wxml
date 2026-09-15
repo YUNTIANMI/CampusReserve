@@ -1,35 +1,81 @@
 <view class="cr-page">
+  <!-- 顶部区域 -->
   <view class="hero">
-    <text class="hero__title">{{projectName}}</text>
-    <text class="hero__desc">{{description}}</text>
+    <view class="hero__main">
+      <view class="hero__title">{{projectName}}</view>
+      <view class="hero__desc">{{slogan}}</view>
+    </view>
+    <view
+      class="hero__action"
+      hover-class="hero__action--hover"
+      hover-stay-time="80"
+      bindtap="onOpenMyBookings"
+    >
+      <text class="hero__action-text">我的预约</text>
+      <text class="hero__action-arrow">›</text>
+    </view>
   </view>
 
+  <!-- 分类入口 -->
   <view class="cr-section">
-    <view class="cr-section__title">页面入口</view>
-    <view class="cr-section__desc">点击进入对应页面，用于验证页面路由是否正常。</view>
-    <view class="cr-list">
+    <view class="cr-section__title">资源分类</view>
+    <view class="category-grid">
       <view
-        class="cr-list__item"
-        wx:for="{{navEntries}}"
-        wx:key="url"
-        data-url="{{item.url}}"
-        hover-class="cr-hover"
+        class="category-item"
+        wx:for="{{categories}}"
+        wx:key="value"
+        data-category="{{item.value}}"
+        hover-class="category-item--hover"
         hover-stay-time="80"
-        bindtap="onNavigate"
+        bindtap="onTapCategory"
       >
-        <view class="entry">
-          <text class="entry__title">{{item.title}}</text>
-          <text class="entry__desc">{{item.desc}}</text>
-        </view>
-        <text class="entry__arrow">›</text>
+        <text class="category-item__label">{{item.label}}</text>
+        <text class="category-item__desc">{{item.desc}}</text>
       </view>
     </view>
   </view>
 
-  <view class="cr-section">
-    <view class="cr-section__desc">
-      Phase 1 已建立页面框架：五条页面路由、基础状态组件（Loading / Empty / Error）、
-      基础样式与统一请求服务。首页的分类入口与热门资源将在 Phase 2 接入。
+  <!-- 资源区：四态互斥，任何时刻只渲染其一 -->
+  <loading-state wx:if="{{pageState === 'loading'}}" text="正在加载资源" />
+
+  <error-state
+    wx:elif="{{pageState === 'error'}}"
+    message="{{errorMessage}}"
+    bind:retry="onRetry"
+  />
+
+  <empty-state
+    wx:elif="{{pageState === 'empty'}}"
+    text="暂无资源"
+    description="暂时没有可预约的资源，可以稍后重试"
+    action-text="重新加载"
+    bind:action="onRetry"
+  />
+
+  <block wx:else>
+    <view class="cr-section" wx:if="{{hotResources.length > 0}}">
+      <view class="cr-section__head">
+        <text class="cr-section__title">热门资源</text>
+        <text class="cr-section__more" bindtap="onOpenAllResources">查看全部 ›</text>
+      </view>
+      <resource-card
+        wx:for="{{hotResources}}"
+        wx:key="id"
+        resource="{{item}}"
+        bind:cardtap="onTapResource"
+      />
     </view>
-  </view>
+
+    <view class="cr-section" wx:if="{{recommendResources.length > 0}}">
+      <view class="cr-section__head">
+        <text class="cr-section__title">推荐资源</text>
+      </view>
+      <resource-card
+        wx:for="{{recommendResources}}"
+        wx:key="id"
+        resource="{{item}}"
+        bind:cardtap="onTapResource"
+      />
+    </view>
+  </block>
 </view>

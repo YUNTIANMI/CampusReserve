@@ -32,6 +32,18 @@ export interface Resource {
   imageUrl?: string
 }
 
+/**
+ * 资源列表查询参数。
+ * 对应 `GET /api/resources` 的 query，具体字段以 `docs/05_api_contract.md` 为准；
+ * 该文档建立前，Service 层按此结构组装参数。
+ */
+export interface ResourceQuery {
+  /** 按资源类型筛选；空串或缺省表示不筛选 */
+  type?: ResourceType | ''
+  /** 返回条数上限；缺省表示由服务端决定 */
+  limit?: number
+}
+
 /** 时间段状态；用户只能选择 AVAILABLE */
 export type TimeSlotStatus = 'AVAILABLE' | 'BOOKED' | 'DISABLED'
 
