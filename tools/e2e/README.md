@@ -29,6 +29,11 @@ node ./start-automation.js
 node ./e2e-phase1.js ws://127.0.0.1:9420
 ```
 
+也可以用 npm 脚本：`npm run auto` / `npm run phase1`。
+
+`start-automation.js` 会自动定位开发者工具 CLI（可用命令行参数或 `WX_DEVTOOLS_CLI` 环境变量覆盖），
+并把工程根指向 `../../CampusReserve`。
+
 退出码 `0` 表示全部通过，输出末行为 `E2E_TEST = PASS`。
 
 ## 实测踩坑（改动测试脚本前务必先读）
