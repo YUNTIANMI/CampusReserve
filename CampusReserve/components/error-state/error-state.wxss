@@ -1,0 +1,47 @@
+/* 自定义组件默认样式隔离，仅 CSS 自定义属性可从 page 继承。 */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 96rpx 32rpx;
+}
+
+.error-state__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96rpx;
+  height: 96rpx;
+  font-size: 48rpx;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--cr-color-danger, #f5222d);
+  border: 4rpx solid var(--cr-color-danger, #f5222d);
+  border-radius: 50%;
+}
+
+.error-state__text {
+  margin-top: 32rpx;
+  font-size: var(--cr-font-md, 28rpx);
+  color: var(--cr-color-text-secondary, #646a73);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.error-state__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 76rpx;
+  margin-top: 40rpx;
+  padding: 0 48rpx;
+  font-size: var(--cr-font-md, 28rpx);
+  color: #ffffff;
+  background-color: var(--cr-color-primary, #2f6bff);
+  border-radius: var(--cr-radius-md, 16rpx);
+}
+
+.error-state__action--hover {
+  background-color: var(--cr-color-primary-dark, #1f57e0);
+}

@@ -1,21 +1,35 @@
-<view class="page">
+<view class="cr-page">
   <view class="hero">
     <text class="hero__title">{{projectName}}</text>
     <text class="hero__desc">{{description}}</text>
   </view>
 
-  <view class="card">
-    <view class="card__row">
-      <text class="card__label">当前阶段</text>
-      <text class="card__value">{{phase}}</text>
-    </view>
-    <view class="card__row">
-      <text class="card__label">技术栈</text>
-      <text class="card__value">{{stack}}</text>
+  <view class="cr-section">
+    <view class="cr-section__title">页面入口</view>
+    <view class="cr-section__desc">点击进入对应页面，用于验证页面路由是否正常。</view>
+    <view class="cr-list">
+      <view
+        class="cr-list__item"
+        wx:for="{{navEntries}}"
+        wx:key="url"
+        data-url="{{item.url}}"
+        hover-class="cr-hover"
+        hover-stay-time="80"
+        bindtap="onNavigate"
+      >
+        <view class="entry">
+          <text class="entry__title">{{item.title}}</text>
+          <text class="entry__desc">{{item.desc}}</text>
+        </view>
+        <text class="entry__arrow">›</text>
+      </view>
     </view>
   </view>
 
-  <view class="hint">
-    <text>工程骨架已就绪，页面路由与组件将在 Phase 1 搭建。</text>
+  <view class="cr-section">
+    <view class="cr-section__desc">
+      Phase 1 已建立页面框架：五条页面路由、基础状态组件（Loading / Empty / Error）、
+      基础样式与统一请求服务。首页的分类入口与热门资源将在 Phase 2 接入。
+    </view>
   </view>
 </view>

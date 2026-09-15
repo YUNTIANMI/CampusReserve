@@ -1,0 +1,48 @@
+<view class="cr-page">
+  <!-- 参数缺失：不渲染空白页，给出明确提示 -->
+  <error-state
+    wx:if="{{!hasValidId}}"
+    message="缺少或非法的资源 ID 参数"
+    button-text="返回上一页"
+    bind:retry="onBack"
+  />
+
+  <block wx:else>
+    <view class="cr-section">
+      <view class="cr-section__title">资源详情</view>
+      <view class="cr-section__desc">
+        Phase 1 建立页面骨架与参数接收；Phase 4 接入资源信息、日期选择与可用时间段。
+      </view>
+    </view>
+
+    <view class="cr-card">
+      <view class="cr-list__item">
+        <text class="cr-text-secondary cr-text-sm">资源 ID</text>
+        <text class="cr-text-strong">{{resourceId}}</text>
+      </view>
+      <view class="cr-list__item">
+        <text class="cr-text-secondary cr-text-sm">图片 / 名称 / 类型</text>
+        <text class="cr-text-muted cr-text-sm">Phase 4 接入</text>
+      </view>
+      <view class="cr-list__item">
+        <text class="cr-text-secondary cr-text-sm">地点 / 容量 / 描述</text>
+        <text class="cr-text-muted cr-text-sm">Phase 4 接入</text>
+      </view>
+      <view class="cr-list__item">
+        <text class="cr-text-secondary cr-text-sm">可用时间段</text>
+        <text class="cr-text-muted cr-text-sm">Phase 4 接入</text>
+      </view>
+    </view>
+
+    <view class="cr-section nav">
+      <view class="cr-section__title">骨架导航</view>
+      <view class="cr-section__desc">用于验证页面路由。</view>
+      <view class="cr-btn cr-btn--primary cr-btn--block" hover-class="cr-hover" bindtap="onOpenBookings">
+        进入我的预约
+      </view>
+      <view class="cr-btn cr-btn--ghost cr-btn--block nav__second" hover-class="cr-hover" bindtap="onBack">
+        返回上一页
+      </view>
+    </view>
+  </block>
+</view>

@@ -1,0 +1,46 @@
+<view class="cr-page">
+  <view class="cr-section">
+    <view class="cr-section__title">资源列表</view>
+    <view class="cr-section__desc">
+      Phase 1 建立页面状态骨架；Phase 3 接入资源接口并渲染资源卡片。
+    </view>
+  </view>
+
+  <!-- loading -->
+  <loading-state wx:if="{{pageState === 'loading'}}" text="正在加载资源" />
+
+  <!-- error -->
+  <error-state
+    wx:elif="{{pageState === 'error'}}"
+    message="{{errorMessage}}"
+    bind:retry="onRetry"
+  />
+
+  <!-- empty -->
+  <empty-state
+    wx:elif="{{pageState === 'empty'}}"
+    text="暂无资源数据"
+    description="资源数据尚未接入（Phase 3 实现），当前展示空状态。"
+    action-text="返回上一页"
+    bind:action="onEmptyAction"
+  />
+
+  <!-- success -->
+  <view wx:else class="cr-card">
+    <text class="cr-text-secondary cr-text-sm">
+      分类：{{category || '全部'}}
+    </text>
+    <view class="cr-divider placeholder__divider"></view>
+    <text class="cr-text-secondary cr-text-sm">
+      Phase 3 将在此渲染资源卡片列表与分类筛选。
+    </text>
+  </view>
+
+  <view class="cr-section nav">
+    <view class="cr-section__title">骨架导航</view>
+    <view class="cr-section__desc">用于验证页面路由。</view>
+    <view class="cr-btn cr-btn--primary cr-btn--block" hover-class="cr-hover" bindtap="onOpenDetail">
+      进入资源详情（示例 id={{sampleResourceId}}）
+    </view>
+  </view>
+</view>

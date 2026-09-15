@@ -1,10 +1,215 @@
-/* app.wxss —— 全局样式
-   Phase 1 会在此建立完整的基础样式与设计变量。 */
+/* ==========================================================================
+   CampusReserve 全局样式
+   --------------------------------------------------------------------------
+   1. 设计变量（CSS 自定义属性）统一声明在 page 上，页面与自定义组件均可用
+      var(--cr-xxx, 回退值) 引用（自定义属性属于继承样式，可穿透组件样式隔离）。
+   2. 通用工具类供页面使用；自定义组件默认样式隔离，需自带样式，不要依赖这里的类名。
+   3. 命名规范：块用 -，元素用 __，修饰符用 --，统一前缀 cr-。
+   ========================================================================== */
 
 page {
-  background-color: #f5f6f8;
-  color: #1f2329;
-  font-size: 28rpx;
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC",
-    "Microsoft YaHei", sans-serif;
+  /* 颜色 */
+  --cr-color-primary: #2f6bff;
+  --cr-color-primary-dark: #1f57e0;
+  --cr-color-text: #1f2329;
+  --cr-color-text-secondary: #646a73;
+  --cr-color-text-muted: #8f959e;
+  --cr-color-border: #eef0f3;
+  --cr-color-border-strong: #dcdfe5;
+  --cr-color-bg: #f5f6f8;
+  --cr-color-surface: #ffffff;
+  --cr-color-hover: #f2f3f5;
+  --cr-color-danger: #f5222d;
+  --cr-color-success: #00b42a;
+
+  /* 圆角 */
+  --cr-radius-sm: 8rpx;
+  --cr-radius-md: 16rpx;
+  --cr-radius-lg: 24rpx;
+
+  /* 间距 */
+  --cr-space-xs: 8rpx;
+  --cr-space-sm: 16rpx;
+  --cr-space-md: 24rpx;
+  --cr-space-lg: 32rpx;
+  --cr-space-xl: 48rpx;
+
+  /* 字号 */
+  --cr-font-xs: 22rpx;
+  --cr-font-sm: 26rpx;
+  --cr-font-md: 28rpx;
+  --cr-font-lg: 32rpx;
+  --cr-font-xl: 40rpx;
+  --cr-font-xxl: 48rpx;
+
+  background-color: var(--cr-color-bg);
+  color: var(--cr-color-text);
+  font-size: var(--cr-font-md);
+  line-height: 1.5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+}
+
+/* ---------- 布局 ---------- */
+
+.cr-page {
+  min-height: 100vh;
+  padding: var(--cr-space-lg) var(--cr-space-lg) var(--cr-space-xl);
+  box-sizing: border-box;
+}
+
+.cr-section {
+  margin-bottom: var(--cr-space-lg);
+}
+
+.cr-section__title {
+  margin-bottom: var(--cr-space-sm);
+  font-size: var(--cr-font-lg);
+  font-weight: 600;
+  color: var(--cr-color-text);
+}
+
+.cr-section__desc {
+  margin-top: var(--cr-space-xs);
+  font-size: var(--cr-font-sm);
+  color: var(--cr-color-text-muted);
+  line-height: 1.6;
+}
+
+.cr-flex {
+  display: flex;
+  align-items: center;
+}
+
+.cr-flex--between {
+  justify-content: space-between;
+}
+
+.cr-flex--center {
+  justify-content: center;
+}
+
+/* ---------- 卡片与列表 ---------- */
+
+.cr-card {
+  padding: var(--cr-space-md) var(--cr-space-md);
+  background-color: var(--cr-color-surface);
+  border-radius: var(--cr-radius-md);
+}
+
+.cr-card--flat {
+  background-color: transparent;
+  border: 1rpx solid var(--cr-color-border);
+}
+
+.cr-list {
+  overflow: hidden;
+  background-color: var(--cr-color-surface);
+  border-radius: var(--cr-radius-md);
+}
+
+.cr-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--cr-space-md);
+  border-bottom: 1rpx solid var(--cr-color-border);
+}
+
+.cr-list__item:last-child {
+  border-bottom: none;
+}
+
+.cr-hover {
+  background-color: var(--cr-color-hover);
+}
+
+/* ---------- 文本 ---------- */
+
+.cr-text-secondary {
+  color: var(--cr-color-text-secondary);
+}
+
+.cr-text-muted {
+  color: var(--cr-color-text-muted);
+}
+
+.cr-text-sm {
+  font-size: var(--cr-font-sm);
+}
+
+.cr-text-lg {
+  font-size: var(--cr-font-lg);
+  font-weight: 600;
+}
+
+.cr-text-strong {
+  font-weight: 600;
+}
+
+/* ---------- 按钮 ---------- */
+
+.cr-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 88rpx;
+  padding: 0 var(--cr-space-lg);
+  font-size: var(--cr-font-lg);
+  line-height: 1;
+  color: var(--cr-color-text);
+  background-color: var(--cr-color-surface);
+  border-radius: var(--cr-radius-md);
+}
+
+/* 重置原生 button 的默认边框 */
+button.cr-btn {
+  border: none;
+}
+
+button.cr-btn::after {
+  border: none;
+}
+
+.cr-btn--primary {
+  color: #ffffff;
+  background-color: var(--cr-color-primary);
+}
+
+.cr-btn--ghost {
+  color: var(--cr-color-text-secondary);
+  background-color: transparent;
+  border: 1rpx solid var(--cr-color-border-strong);
+}
+
+.cr-btn--small {
+  height: 64rpx;
+  padding: 0 var(--cr-space-md);
+  font-size: var(--cr-font-sm);
+}
+
+.cr-btn--block {
+  width: 100%;
+}
+
+.cr-btn--disabled {
+  opacity: 0.45;
+}
+
+/* ---------- 其它 ---------- */
+
+.cr-divider {
+  height: 1rpx;
+  background-color: var(--cr-color-border);
+}
+
+.cr-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--cr-space-sm);
+  height: 40rpx;
+  font-size: var(--cr-font-xs);
+  color: var(--cr-color-text-secondary);
+  background-color: var(--cr-color-bg);
+  border-radius: var(--cr-radius-sm);
 }

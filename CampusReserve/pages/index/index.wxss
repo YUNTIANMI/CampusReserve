@@ -1,56 +1,40 @@
-.page {
-  padding: 48rpx 32rpx;
-}
-
 .hero {
   display: flex;
   flex-direction: column;
-  padding: 40rpx 0 48rpx;
+  padding: 24rpx 0 48rpx;
 }
 
 .hero__title {
-  font-size: 48rpx;
+  font-size: var(--cr-font-xxl);
   font-weight: 600;
-  color: #1f2329;
+  color: var(--cr-color-text);
 }
 
 .hero__desc {
   margin-top: 12rpx;
-  font-size: 28rpx;
-  color: #646a73;
+  font-size: var(--cr-font-md);
+  color: var(--cr-color-text-secondary);
 }
 
-.card {
-  padding: 8rpx 28rpx;
-  background-color: #ffffff;
-  border-radius: 16rpx;
-}
-
-.card__row {
+.entry {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 28rpx 0;
-  border-bottom: 1rpx solid #eef0f3;
+  flex-direction: column;
+  flex: 1;
+  padding-right: 16rpx;
 }
 
-.card__row:last-child {
-  border-bottom: none;
+.entry__title {
+  font-size: var(--cr-font-md);
+  color: var(--cr-color-text);
 }
 
-.card__label {
-  font-size: 26rpx;
-  color: #8f959e;
+.entry__desc {
+  margin-top: 8rpx;
+  font-size: var(--cr-font-sm);
+  color: var(--cr-color-text-muted);
 }
 
-.card__value {
-  font-size: 28rpx;
-  color: #1f2329;
-}
-
-.hint {
-  margin-top: 32rpx;
-  font-size: 24rpx;
-  color: #8f959e;
-  line-height: 1.6;
+.entry__arrow {
+  font-size: 36rpx;
+  color: var(--cr-color-text-muted);
 }

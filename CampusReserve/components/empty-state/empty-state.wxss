@@ -1,0 +1,56 @@
+/* 自定义组件默认样式隔离，仅 CSS 自定义属性可从 page 继承。 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 96rpx 32rpx;
+}
+
+.empty-state__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 128rpx;
+  height: 128rpx;
+  background-color: var(--cr-color-bg, #f5f6f8);
+  border-radius: 50%;
+}
+
+.empty-state__icon-line {
+  width: 56rpx;
+  height: 8rpx;
+  background-color: var(--cr-color-border-strong, #dcdfe5);
+  border-radius: 4rpx;
+}
+
+.empty-state__text {
+  margin-top: 32rpx;
+  font-size: var(--cr-font-md, 28rpx);
+  color: var(--cr-color-text-secondary, #646a73);
+}
+
+.empty-state__desc {
+  margin-top: 12rpx;
+  font-size: var(--cr-font-sm, 26rpx);
+  color: var(--cr-color-text-muted, #8f959e);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.empty-state__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 72rpx;
+  margin-top: 40rpx;
+  padding: 0 40rpx;
+  font-size: var(--cr-font-sm, 26rpx);
+  color: var(--cr-color-primary, #2f6bff);
+  border: 1rpx solid var(--cr-color-primary, #2f6bff);
+  border-radius: var(--cr-radius-md, 16rpx);
+}
+
+.empty-state__action--hover {
+  background-color: rgba(47, 107, 255, 0.08);
+}

@@ -1,30 +1,27 @@
 /**
- * 全局环境类型声明（ambient types）
+ * 全局 ambient 类型声明。
  *
- * 这些类型使用 `declare` 声明为全局可见，任何 .ts 文件都无需 import 即可使用，
- * 与微信小程序 Page / Component 的写法保持一致。
+ * 本文件只保留必须全局可见的声明（App 实例类型）。
+ * 业务类型一律放在同目录的模块文件中（api.ts / booking.ts / page.ts / resource.ts / user.ts），
+ * 由 types/index.ts 统一出口，使用方显式 import，避免隐式全局耦合。
  *
- * 取值范围需与后端 API Contract 一致，见 docs/（API 契约文档待 Phase 10 前建立）。
+ * 由 typings/index.d.ts 通过 reference 引入，同时在 tsconfig.json 的 include 范围内。
  */
+import type { LoginState, UserInfo } from './user'
 
-/** 登录状态 */
-declare type LoginState = 'LOGGED_OUT' | 'LOGGED_IN'
-
-/** 资源类型：自习室 / 研讨室 / 摄影棚 / 球场 */
-declare type ResourceType = 'STUDY_ROOM' | 'SEMINAR_ROOM' | 'STUDIO' | 'COURT'
-
-/** 时间段状态；用户只能选择 AVAILABLE */
-declare type TimeSlotStatus = 'AVAILABLE' | 'BOOKED' | 'DISABLED'
-
-/** 预约状态：待使用 / 已完成 / 已取消 */
-declare type BookingStatus = 'PENDING' | 'COMPLETED' | 'CANCELLED'
-
-/**
- * 用户基础信息。
- * 仅缓存展示所需的最小字段，禁止缓存敏感信息。
- */
-declare interface UserInfo {
-  id: number
-  nickname: string
-  avatarUrl?: string
+declare global {
+  /**
+   * 全局 App 实例类型。
+   * 必须与 app.ts 中 App<IAppOption>({ ... }) 的 globalData 结构保持一致。
+   */
+  interface IAppOption {
+    globalData: {
+      /** 已登录用户信息；未登录时为 undefined */
+      userInfo?: UserInfo
+      /** 登录状态 */
+      loginState: LoginState
+      /** 后端 API 根地址（来自 services/config.ts） */
+      baseUrl: string
+    }
+  }
 }

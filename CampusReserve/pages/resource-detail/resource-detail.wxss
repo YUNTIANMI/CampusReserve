@@ -1,0 +1,7 @@
+.nav {
+  margin-top: 48rpx;
+}
+
+.nav__second {
+  margin-top: 20rpx;
+}

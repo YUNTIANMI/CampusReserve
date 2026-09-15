@@ -1,0 +1,33 @@
+<view class="cr-page">
+  <view class="cr-section">
+    <view class="cr-section__title">我的预约</view>
+    <view class="cr-section__desc">
+      Phase 1 建立页面骨架与状态切换；Phase 7 接入预约列表接口并渲染预约卡片。
+    </view>
+  </view>
+
+  <view class="tabs">
+    <view
+      class="tabs__item {{activeStatus === item.status ? 'tabs__item--active' : ''}}"
+      wx:for="{{tabs}}"
+      wx:key="status"
+      data-status="{{item.status}}"
+      hover-class="cr-hover"
+      hover-stay-time="80"
+      bindtap="onTabChange"
+    >{{item.label}}</view>
+  </view>
+
+  <empty-state
+    text="{{emptyText}}"
+    description="预约数据尚未接入（Phase 7 实现），当前展示空状态。"
+  />
+
+  <view class="cr-section nav">
+    <view class="cr-section__title">骨架导航</view>
+    <view class="cr-section__desc">用于验证页面路由。</view>
+    <view class="cr-btn cr-btn--primary cr-btn--block" hover-class="cr-hover" bindtap="onOpenDetail">
+      进入预约详情（示例 id={{sampleBookingId}}）
+    </view>
+  </view>
+</view>

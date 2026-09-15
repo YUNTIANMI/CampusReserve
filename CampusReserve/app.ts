@@ -1,12 +1,14 @@
 /// <reference path="./typings/index.d.ts" />
 
+import { API_BASE_URL } from './services/config'
+
 App<IAppOption>({
   globalData: {
     userInfo: undefined,
     loginState: 'LOGGED_OUT',
-    // 开发者工具中可在「详情 → 本地设置」勾选「不校验合法域名」以便直连本机后端。
-    // 真机预览时 127.0.0.1 指向手机自身，需改为电脑的局域网 IP。
-    baseUrl: 'http://127.0.0.1:8080/api',
+    // API 根地址的唯一来源是 services/config.ts，此处仅为方便读取而透出。
+    // 真机预览时需在 config.ts 中改为电脑的局域网 IP（见该文件注释）。
+    baseUrl: API_BASE_URL,
   },
 
   onLaunch() {

@@ -1,0 +1,48 @@
+<view class="cr-page">
+  <!-- 参数缺失：不渲染空白页，给出明确提示 -->
+  <error-state
+    wx:if="{{!hasValidId}}"
+    message="缺少或非法的预约 ID 参数"
+    button-text="返回上一页"
+    bind:retry="onBack"
+  />
+
+  <block wx:else>
+    <view class="cr-section">
+      <view class="cr-section__title">预约详情</view>
+      <view class="cr-section__desc">
+        Phase 1 建立页面骨架与参数接收；Phase 7 展示预约数据，Phase 8 实现取消预约。
+      </view>
+    </view>
+
+    <view class="cr-card">
+      <view class="cr-list__item">
+        <text class="cr-text-secondary cr-text-sm">预约 ID</text>
+        <text class="cr-text-strong">{{bookingId}}</text>
+      </view>
+      <view class="cr-list__item">
+        <text class="cr-text-secondary cr-text-sm">资源 / 地点</text>
+        <text class="cr-text-muted cr-text-sm">Phase 7 接入</text>
+      </view>
+      <view class="cr-list__item">
+        <text class="cr-text-secondary cr-text-sm">日期 / 时间段</text>
+        <text class="cr-text-muted cr-text-sm">Phase 7 接入</text>
+      </view>
+      <view class="cr-list__item">
+        <text class="cr-text-secondary cr-text-sm">预约状态</text>
+        <text class="cr-text-muted cr-text-sm">Phase 7 接入</text>
+      </view>
+    </view>
+
+    <view class="cr-section nav">
+      <view class="cr-section__title">骨架导航</view>
+      <view class="cr-section__desc">用于验证页面路由。</view>
+      <view class="cr-btn cr-btn--primary cr-btn--block" hover-class="cr-hover" bindtap="onOpenBookings">
+        进入我的预约
+      </view>
+      <view class="cr-btn cr-btn--ghost cr-btn--block nav__second" hover-class="cr-hover" bindtap="onBack">
+        返回上一页
+      </view>
+    </view>
+  </block>
+</view>

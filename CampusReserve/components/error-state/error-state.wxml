@@ -1,0 +1,11 @@
+<view class="error-state">
+  <view class="error-state__icon">!</view>
+  <text class="error-state__text">{{message}}</text>
+  <view
+    class="error-state__action"
+    wx:if="{{showRetry}}"
+    hover-class="error-state__action--hover"
+    hover-stay-time="80"
+    bindtap="handleRetry"
+  >{{buttonText}}</view>
+</view>

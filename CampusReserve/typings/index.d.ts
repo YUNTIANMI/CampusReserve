@@ -2,16 +2,6 @@
 /// <reference path="../types/global.d.ts" />
 
 /**
- * 全局 App 实例类型。
- * 必须与 app.ts 中 App<IAppOption>({ ... }) 的 globalData 结构保持一致。
+ * 本目录只存放第三方类型定义（微信小程序 API，来自 miniprogram-api-typings）。
+ * 项目自身的类型定义在 ../types/ 下，请勿写入本目录。
  */
-interface IAppOption {
-  globalData: {
-    /** 已登录用户信息；未登录时为 undefined */
-    userInfo?: UserInfo
-    /** 登录状态，取值见 types/global.d.ts */
-    loginState: LoginState
-    /** 后端 API 根地址 */
-    baseUrl: string
-  }
-}

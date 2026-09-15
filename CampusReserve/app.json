@@ -1,6 +1,10 @@
 {
   "pages": [
-    "pages/index/index"
+    "pages/index/index",
+    "pages/resource-list/resource-list",
+    "pages/resource-detail/resource-detail",
+    "pages/my-bookings/my-bookings",
+    "pages/booking-detail/booking-detail"
   ],
   "window": {
     "navigationBarBackgroundColor": "#ffffff",

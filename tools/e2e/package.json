@@ -1,0 +1,13 @@
+{
+  "name": "campusreserve-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CampusReserve 小程序端到端测试（基于 miniprogram-automator，在真实微信开发者工具中运行）",
+  "scripts": {
+    "auto": "node ./start-automation.js",
+    "phase1": "node ./e2e-phase1.js ws://127.0.0.1:9420"
+  },
+  "devDependencies": {
+    "miniprogram-automator": "^0.12.1"
+  }
+}
