@@ -261,11 +261,13 @@ node ./start-automation.js          # 启动开发者工具自动化模式（端
 node ./e2e-phase1.js                # Phase 1：路由、页面参数、四态组件、页签
 node ./e2e-phase2.js                # Phase 2：首页、分类入口、ResourceCard、下拉刷新
 node ./e2e-phase3.js                # Phase 3：列表页、分类筛选、卡片列表、四态、下拉刷新
+node ./e2e-phase4.js                # Phase 4：资源详情、日期条、时间段三态、选择与按钮状态
 ```
 
 测试脚本编写的硬约束（选择器无法穿透自定义组件、`page.xpath()` 的占位返回与谓词能力、
 不可使用 `reLaunch`、路由断言须读 appservice 页面栈、**导航之间必须等过渡收尾**、
-**点击后不能只等状态字段变回原值**）见 `tools/e2e/README.md`，改动测试前必读。
+**点击后不能只等状态字段变回原值**、**点击必须落在组件根节点上且 `text()` 不穿透组件边界**）
+见 `tools/e2e/README.md`，改动测试前必读。
 
 ---
 

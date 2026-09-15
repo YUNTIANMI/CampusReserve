@@ -21,11 +21,11 @@
 
 ## 2. Current Phase
 
-当前阶段：Phase 3 - 资源列表（已完成，E2E 实测 65/65 通过）
+当前阶段：Phase 4 - 资源详情与时间选择（已完成，E2E 实测 81/81 通过）
 
 当前任务：无
 
-下一阶段：Phase 4 - 资源详情与时间选择
+下一阶段：Phase 5 - 用户登录
 
 ## 3. Completed
 
@@ -78,16 +78,31 @@ Phase 3（资源列表）：
 - [x] 端到端测试：真实开发者工具中 65/65 通过（`tools/e2e/e2e-phase3.js`）
 - [x] 回归测试：Phase 1 36/36、Phase 2 47/47 通过
 
+Phase 4（资源详情与时间选择）：
+- [x] 图片展示：`imageUrl` 存在时渲染 `<image>`，缺省时渲染资源类型占位块（与 `ResourceCard` 同一处理方式）
+- [x] 资源信息：名称、类型、地点、容量、描述
+- [x] 日期选择：未来 7 天横向日期条，默认今天，激活态与选中日期联动
+- [x] `TimeSlot` 组件（`components/time-slot/`）：展示时段文案与状态文案，抛出 `slottap` 事件
+- [x] 可用 / 不可用状态：`AVAILABLE` / `BOOKED` / `DISABLED` 三态渲染与样式区分
+- [x] 获取指定日期可用时间：`getAvailability(resourceId, date)` → `GET /api/resources/{id}/availability`
+- [x] 选择时间：仅 `AVAILABLE` 可选；再次点击已选时段即取消选择
+- [x] 预约按钮状态：未选时段禁用且点击无反馈，选中后文案为「预约 HH:mm-HH:mm」并可点击
+- [x] 资源信息区与时间段区**各自独立四态**，切换日期失败不影响资源信息与日期条
+- [x] 资源不存在（接口正常返回但查无此资源）落到 empty 态而非 error 态
+- [x] 非法 `id`（非数字、0、非正整数）一律判定为参数错误并展示错误态
+- [x] 静态检查：`tsc --noEmit` 0 错误
+- [x] 端到端测试：真实开发者工具中 81/81 通过（`tools/e2e/e2e-phase4.js`）
+- [x] 回归测试：Phase 1 36/36、Phase 2 47/47、Phase 3 65/65 通过
+
 ## 4. In Progress
 
 暂无。
 
 ## 5. Next Tasks
 
-1. Phase 4：资源详情页图片展示与资源信息
-2. Phase 4：日期选择与 `TimeSlot` 组件（可用 / 不可用状态）
-3. Phase 4：获取指定日期可用时间段与选择时间
-4. Phase 4：预约按钮状态
+1. Phase 5：登录入口
+2. Phase 5：微信登录流程（`wx.login` → 后端换取登录态）
+3. Phase 5：登录状态保存（本地缓存 `userInfo` / `loginState`，技术设计 §9）
 
 ## 6. Current Frontend State
 
@@ -110,14 +125,27 @@ AppID：`wxb97024eb0305368d`
 
 服务（`services/`）：
 - `config.ts`：API 根地址、超时常量，以及开发期数据源开关 `USE_MOCK_DATA` 与模式存储键
+  （Phase 4 追加 `MOCK_AVAIL_MODE_STORAGE_KEY`，与列表/详情的模式键分开，理由见 §11）
 - `request.ts`：封装 `wx.request`，统一归一化为 `ApiError`（区分网络失败 / 超时 / HTTP 非 2xx / 业务 code ≠ 0）
-- `resource.ts`（Phase 2）：资源业务接口 `getResources(query)`，数据来源由 `USE_MOCK_DATA` 决定
-- `mock-resource.ts`（Phase 2）：开发期本地资源数据源，支持 success / empty / error 三种模式
+- `resource.ts`（Phase 2 / Phase 4）：资源业务接口
+  - `getResources(query)`（Phase 2）
+  - `getResourceDetail(id)`（Phase 4）：**资源不存在时 resolve(null) 而不是抛错**，
+    使「查无此资源」落到 empty 态、「请求失败」落到 error 态。该约定待 `docs/05_api_contract.md` 确认
+  - `getAvailability(resourceId, date)`（Phase 4）→ `GET /api/resources/{id}/availability`
+- `mock-resource.ts`（Phase 2 / Phase 4）：开发期本地数据源
+  - `mockGetResources` / `mockGetResourceDetail` / `mockGetAvailability`
+  - `MOCK_SLOT_TEMPLATE`：6 个时段（取自需求 §4.4），`default` 模式下按确定性规则分布
+    `BOOKED` / `DISABLED` / `AVAILABLE`，保证任意资源任意日期都能同时看到三种状态
 
 工具（`utils/`）：
 - `resource.ts`（Phase 2）：资源分类常量 `RESOURCE_TYPE_OPTIONS` 与 `getResourceTypeLabel()`
 - `resource.ts`（Phase 3 追加）：列表页筛选项 `RESOURCE_FILTER_OPTIONS`（首项「全部」，值为空串）、
   类型守卫 `isResourceType()`、参数归一化 `normalizeResourceType()`
+- `date.ts`（Phase 4）：`YYYY-MM-DD` 格式化与校验解析、星期中文名、`HH:mm` 转分钟、
+  日期条选项 `buildDateOptions(days)`
+- `time-slot.ts`（Phase 4）：时段状态中文标签 `getTimeSlotStatusLabel()`、
+  是否可选 `isTimeSlotSelectable()`（只认 `AVAILABLE`）、时段文案 `getTimeSlotLabel()`、
+  同一时段判定 `isSameTimeSlot()`
 
 页面：
 - `pages/index`（Phase 2 完成）：真实首页，含顶部区域、4 个分类入口、热门 / 推荐资源、
@@ -129,7 +157,16 @@ AppID：`wxb97024eb0305368d`
   2. **非法 `category` 归一化为「全部」而非错误态**——详情页缺少 `id` 就无事可做，
      但列表页的筛选条件不满足时页面依然可用，一个脏链接不该把功能全部挡掉。
   另：切换分类时比对请求发出时的 `category`，条件已变则丢弃该次过期响应。
-- `pages/resource-detail`：接收 `id` 参数，参数缺失时展示错误态（Phase 4 实现内容）
+- `pages/resource-detail`（Phase 4 完成）：真实详情页，含图片 / 类型占位、资源信息、7 天日期条、
+  `TimeSlot` 列表、选择时间与预约按钮。四个关键设计：
+  1. **资源信息区与时间段区各自独立四态**——切换日期只重新请求时间段，两区共用一个状态会导致
+     一次时段请求失败就把资源名称、地点、描述一并清掉，用户连在看哪个资源都不知道；
+  2. **日期条是静态内容，不随任何四态变化**——与列表页筛选栏同理（技术设计 §7「禁止白屏」）；
+  3. **资源不存在用 empty 态而不是 error 态**——重试没有意义，只给「返回上一页」，
+     不给一个注定无效的「重新加载」；
+  4. **切换日期清空已选时段**——时段属于某一天，跨日期沿用会提交出用户并未选择的组合。
+  另：切换日期时比对请求发出时的日期，条件已变则丢弃该次过期响应；
+  「有时段但全部不可预约」仍是 success（时段确实存在且要展示），只额外给一句提示。
 - `pages/my-bookings`：待使用 / 已完成 / 已取消三个状态页签
 - `pages/booking-detail`：接收 `id` 参数，参数缺失时展示错误态
 
@@ -138,10 +175,12 @@ AppID：`wxb97024eb0305368d`
 - 已创建（Phase 2）：`resource-card`（资源卡片；事件名 `cardtap`，刻意不复用 `tap`
   以避免与组件内原生 tap 冒泡重复触发；不硬编码路由，跳转由使用方决定），
   Phase 3 在列表页直接复用，组件本身无需改动
-- 待创建：`CategoryCard`、`TimeSlot`、`BookingCard`
+- 已创建（Phase 4）：`time-slot`（时间段；属性 `slot-data` / `selected`，事件 `slottap`，
+  仅 `AVAILABLE` 触发。**属性名不能叫 `slot`**，见 §10 第 7 条）
+- 待创建：`CategoryCard`、`BookingCard`
 
 分类筛选 UI 目前在列表页内联实现（chip 形态，与首页的分类卡片入口形态不同），
-暂未抽取为 `CategoryCard`；`TimeSlot` 留待 Phase 4。
+暂未抽取为 `CategoryCard`；`BookingCard` 留待 Phase 7。
 
 ## 7. Current Backend State
 
@@ -268,6 +307,28 @@ API 设计以：
      success，事件又要跨渲染层→AppService 传递，「等 success」会立刻命中点击前的旧值，于是读到
      上一步的数据（Phase 3 实测因此误报 4 项）。应按「目标字段已变为期望值 **且** 状态为期望值」轮询。
 
+7. **自定义组件的四条硬约束（Phase 4 实测，写组件与写测试都必须遵守）**：
+   - **`slot` 是保留属性，绝不能用作自定义组件的属性名。** `<time-slot slot="{{item}}">` 会被框架
+     当成具名插槽声明吃掉，`properties` 永远收不到值。**不报错、不告警**，症状是「组件渲染出来了、
+     根节点 class 也正确，但内部文案全是空串」——因为组件 `data` 还停在初始值。
+     属性名改为 `slotData`（标签上写 `slot-data`）后正常。定位该问题用了一个临时 WXML 探针
+     （`PROBE[{{label}}][{{slotData.startTime}}]`）才确认「属性没传进来」还是「observer 没生效」。
+   - **`element.tap()` 只把事件派发给「你查到的那个节点」，不是按坐标点一下。** 必须点
+     **组件根节点**（组件 WXML 的最外层节点，它才是挂 `bindtap` 的地方）。点在页面自带的外层包裹
+     节点（如组件外面套的 `<view class="slots__item">`）上，组件内部的事件处理器不会触发，
+     症状是「点了没反应」且不报错（Phase 4 实测因此连带误报 8 项）。
+   - **`text()` 不穿透组件边界聚合内容。** 页面节点里放了自定义组件时，读该页面节点的 `text()`
+     得到空串（内容在组件自己的节点树里）。要读组件内文案，必须查组件根节点或组件内部节点
+     （Phase 3 的 `resource-card` 能取到整条文案，是因为查的正是组件根节点）。
+     `<text>` 节点在内容为空时 `size()` 返回 `0x0`，据此可反推「插值出来是空串」。
+   - **组件根节点 `class` 带插值修饰符时不要用 `@class` 精确匹配。** `class="time-slot {{...}}"`
+     渲染后是 `time-slot time-slot--disabled`（连续空格被规范化），精确匹配永远不中。用
+     `contains(@class,"time-slot") and not(contains(@class,"time-slot__"))`，`not(...)` 用于排除
+     同前缀的子元素。
+   - **改动源码后要留出编译时间再跑测试。** 开发者工具是文件监听 + 增量编译，连续快速改动时，
+     紧接着启动的自动化会话可能仍读到旧编译产物，表现为「代码改了但行为没变」，极易误判为修复无效
+     （Phase 4 实测因此多花了一个来回）。
+
 ## 11. Important Decisions
 
 采用：
@@ -308,13 +369,21 @@ CampusReserve/          # 仓库根
 Git 提交规范：中文 Conventional Commits，`<type>(<scope>): <中文简述>`。
 Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 
-开发期数据源（Phase 2 引入，临时机制）：
+开发期数据源（Phase 2 引入，Phase 4 扩展，临时机制）：
 - 前端页面先于后端实现，`services/config.ts` 的 `USE_MOCK_DATA` 为 `true` 时，
-  由 `services/mock-resource.ts` 提供与 `Resource` 类型一致的本地数据，
+  由 `services/mock-resource.ts` 提供与 `Resource` / `Availability` 类型一致的本地数据，
   使页面在后端 API（Phase 10）落地前即可验证 success / empty / error 三种展示。
 - 该开关只决定数据来源，页面与组件代码不感知；后端联调时改为 `false` 即切到真实接口。
-- 存储键 `CR_MOCK_MODE`（`success` | `empty` | `error`）供调试与端到端测试注入，
-  属开发期机制，联调前应连同开关一并移除。
+- 两个模式存储键供调试与端到端测试注入，属开发期机制，联调前应连同开关一并移除：
+  - `CR_MOCK_MODE`（`success` | `empty` | `error`）：作用于资源列表与资源详情，
+    `empty` 在详情页的含义是「该资源不存在」
+  - `CR_MOCK_AVAIL_MODE`（`default` | `full` | `none` | `error`，Phase 4 追加）：作用于可用时间段，
+    `full` 用于验证「全部约满时按钮保持禁用」，`none` 用于验证时间段空态
+- **两个键刻意分开**：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
+  一个键表达不了「详情正常但该日期时段为空」这种组合。
+- 已定决策：**开发期数据源不提供 `imageUrl`**，因此详情页与资源卡片始终展示类型占位块。
+  这是为了让端到端测试不依赖网络图片。真实图片资源待 Phase 9（体验优化）/ Phase 12（作品集整理）
+  统一补齐，届时只需给 mock 数据或后端数据补 `imageUrl`，页面代码无需改动。
 
 当前不使用：
 - Redis
@@ -349,7 +418,8 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 ## 14. Last Updated
 
 更新时间：2026-09-15  
-最后完成任务：Phase 3 资源列表完成并通过端到端测试（真实开发者工具中 65/65 通过，
-Phase 1 / Phase 2 回归 36/36、47/47）；实现分类筛选栏、资源卡列表、空态文案分流与
-参数归一化，并摸清模拟器路由过渡时序（新增已知问题 6）  
+最后完成任务：Phase 4 资源详情与时间选择完成并通过端到端测试（真实开发者工具中 81/81 通过，
+Phase 1 / Phase 2 / Phase 3 回归 36/36、47/47、65/65）；实现图片与类型占位、资源信息、7 天日期条、
+`TimeSlot` 组件与三态、选择 / 取消选择时间、预约按钮状态，资源信息区与时间段区各自独立四态；
+并摸清自定义组件的四条硬约束（新增已知问题 7）  
 更新者：Developer（AI 协同）
