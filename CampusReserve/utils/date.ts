@@ -4,10 +4,12 @@
  * 技术设计 §4 规定 `utils` 存放工具；本文件只承载「日期字符串 ↔ 展示信息」的转换，
  * 不含任何业务规则（例如某个时间段是否已过期由数据源负责，见 services/mock-resource.ts）。
  *
- * 全项目统一使用两种字符串格式，避免各处自行拼装：
+ * 全项目统一使用三种字符串格式，避免各处自行拼装：
  * - 日期：`YYYY-MM-DD`
  * - 时间：`HH:mm`
- * 与 types/resource.ts 的 `Availability.date` / `TimeSlot.startTime` 注释保持一致。
+ * - 时间戳：`YYYY-MM-DD HH:mm:ss`（预约的 `createdAt`，Phase 6 追加）
+ * 与 types/resource.ts 的 `Availability.date` / `TimeSlot.startTime`、
+ * types/booking.ts 的 `Booking.createdAt` 注释保持一致。
  */
 
 /** 星期中文名，索引与 `Date.getDay()` 一致（0 为周日） */
@@ -26,6 +28,17 @@ export function formatDate(date: Date): string {
 /** 取本机时区的今天，格式 `YYYY-MM-DD` */
 export function todayString(): string {
   return formatDate(new Date())
+}
+
+/**
+ * 把 Date 格式化为 `YYYY-MM-DD HH:mm:ss`（按本机时区，不走 UTC）。
+ * 用于预约的 `createdAt` 这类「带时刻的时间戳」。
+ */
+export function formatDateTime(date: Date): string {
+  const hh = pad(date.getHours())
+  const mm = pad(date.getMinutes())
+  const ss = pad(date.getSeconds())
+  return `${formatDate(date)} ${hh}:${mm}:${ss}`
 }
 
 /**

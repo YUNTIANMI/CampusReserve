@@ -111,8 +111,17 @@
         <view class="submit__summary submit__summary--muted" wx:else>
           请选择上方任一时间段后再提交
         </view>
+        <!--
+          提交失败的原因留在页面上而不只弹 toast：toast 会消失，
+          而「该时段已被预约」是需要用户据此改变行为的提示，必须能反复看到。
+        -->
+        <view class="submit__error" wx:if="{{submitError}}">{{submitError}}</view>
+        <!--
+          按钮配色分两段：底色看「有没有选中时段」（提交中依然是主色，表示这是一次进行中的提交），
+          是否变淡看 canSubmit（提交中会变淡并停止响应点击，避免重复预约）。
+        -->
         <view
-          class="submit__button cr-btn cr-btn--block {{canSubmit ? 'cr-btn--primary' : 'cr-btn--disabled'}}"
+          class="submit__button cr-btn cr-btn--block {{selectedSlot ? 'cr-btn--primary' : 'cr-btn--disabled'}} {{canSubmit ? '' : 'cr-btn--disabled'}}"
           hover-class="{{canSubmit ? 'cr-hover' : 'none'}}"
           hover-stay-time="80"
           bindtap="onSubmit"

@@ -65,3 +65,25 @@ export const MOCK_AVAIL_MODE_STORAGE_KEY = 'CR_MOCK_AVAIL_MODE'
  * 端到端测试需要在不影响其他数据源的前提下单独把登录打失败。
  */
 export const MOCK_AUTH_MODE_STORAGE_KEY = 'CR_MOCK_AUTH_MODE'
+
+/**
+ * 开发期「创建预约」数据源模式存储键（Phase 6 追加）。
+ *
+ * 取值与含义：
+ * - `success`：默认，走完整的真实校验（参数 / 资源 / 时段可用性 / 重复预约），
+ *   校验通过才写入开发期预约表
+ * - `conflict`：强制返回「该时间段已被预约」
+ * - `resource-missing`：强制返回「资源不存在」
+ * - `invalid-time`：强制返回「非法时间」
+ * - `param-error`：强制返回「参数错误」
+ * - `unauthorized`：强制返回「登录状态已失效」（对应 HTTP 401）
+ * - `error`：请求失败（网络异常），与业务失败区分开
+ *
+ * 为什么单独一个键：创建预约有六种要分别验证的失败路径，
+ * 靠「构造非法入参」只能覆盖参数相关的几种（资源不存在、重复预约、
+ * 登录态失效这几种无法从客户端凭据构造），必须由数据源直接注入。
+ *
+ * 另：开发期「预约记录」本身存在 `CR_MOCK_BOOKINGS` 缓存键里，
+ * 见 services/mock-booking-store.ts（端到端测试会直接清掉它以拿到干净状态）。
+ */
+export const MOCK_BOOKING_MODE_STORAGE_KEY = 'CR_MOCK_BOOKING_MODE'

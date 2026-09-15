@@ -4,11 +4,13 @@
  * Phase 1：建立页面骨架、接收 id 参数、处理参数缺失的异常情况。
  * Phase 4：接入资源详情与指定日期可用时间段（GET /api/resources/{id} 与 /availability），
  * 实现图片展示、资源信息、日期选择、TimeSlot、选择时间与预约按钮状态。
+ * Phase 5：预约前补上「用户已登录」这道门槛。
+ * Phase 6：接入真实的预约提交（POST /api/bookings）与全部分支处理。
  *
- * 数据经由 `services/resource.ts` 获取（调用链 Page → Service → API，技术设计 §5），
- * 后端业务 API 落地前由 services/config.ts 的 `USE_MOCK_DATA` 切到本地数据源。
+ * 数据经由 `services/resource.ts` / `services/booking.ts` 获取（调用链 Page → Service → API，
+ * 技术设计 §5），后端业务 API 落地前由 services/config.ts 的 `USE_MOCK_DATA` 切到本地数据源。
  *
- * 五个刻意的设计判断：
+ * 七个刻意的设计判断：
  * 1. **资源信息区与时间段区各自独立四态**。切换日期只重新请求时间段，若两区共用一个状态，
  *    一次时段请求失败就会把资源名称、地点、描述一并清掉——用户连自己在看哪个资源都不知道了。
  *    分开之后，时段失败只在时段区提示并提供重试。
@@ -19,26 +21,45 @@
  * 4. **切换日期时清空已选时段**。时段属于某一天，跨日期沿用会提交出一个用户并未选择的组合。
  * 5. **丢弃过期响应**。连续切换日期时先发的请求可能后返回，会覆盖新日期的结果，
  *    因此返回后比对日期，已变化则丢弃本次结果（同资源列表页处理分类筛选的做法）。
+ * 6. **提交失败要分清「能不能换个方式重试」**。业务失败（冲突 / 参数 / 时间）重试同样的入参
+ *    永远还是失败，必须让用户换时段；只有网络异常才值得原样重试。因此按错误码分流：
+ *    冲突时立即重取时段（让那一格显示为已约满），资源不存在时重新加载详情落到 empty 态，
+ *    登录态失效时清掉本地登录态并引导重新登录——继续保留「已登录」只会让用户反复碰壁。
+ * 7. **客户端预校验不替代服务端校验**。页面提交前先用 utils/booking.ts 判一遍，
+ *    只为「不用等一个来回就知道哪里不对」；服务端仍是权威（Phase 6 由开发期数据源承担、
+ *    Phase 10 由后端承担）。特别是「不得早于当前时间」——页面上的时段是加载时的快照，
+ *    用户停留久了它就可能过期，这条只能在提交那一刻重新判定。
  *
- * 边界说明：本阶段只交付「预约按钮的状态逻辑」（未选时段禁用 / 选中后可点击）。
- * 真正的预约提交（校验 + POST /api/bookings）属于 Phase 6，此处点击只给出提示。
+ * 边界说明：预约成功后的「查看预约详情」与「我的预约」列表内容属于 Phase 7，
+ * 本阶段成功后跳转到我的预约页（该页 Phase 5 已有登录引导、Phase 7 填充列表）。
  */
+import { createBooking } from '../../services/booking'
 import { getAvailability, getResourceDetail } from '../../services/resource'
-import { ApiError } from '../../services/request'
-import { isLoggedIn } from '../../store/auth'
+import { ApiError, ApiErrorCode } from '../../services/request'
+import { clearSession, isLoggedIn } from '../../store/auth'
+import { BOOKING_ERROR_CODE, validateBookingPayload } from '../../utils/booking'
 import { buildDateOptions, getWeekdayLabel } from '../../utils/date'
 import { getResourceTypeLabel } from '../../utils/resource'
 import { getTimeSlotLabel, isSameTimeSlot } from '../../utils/time-slot'
 import type { DateOption } from '../../utils/date'
+import type { Booking, CreateBookingPayload } from '../../types/booking'
 import type { PageState } from '../../types/page'
 import type { Availability, Resource, TimeSlot } from '../../types/resource'
 
 /** 日期条展示天数：从今天起连续 7 天 */
 const DATE_RANGE_DAYS = 7
 
+/** 提交成功后停留多久再跳转（毫秒），让用户看清「预约成功」提示 */
+const SUBMIT_REDIRECT_DELAY = 800
+
+/** 预约成功后的去向；Phase 7 会把该页填成真实的预约列表 */
+const MY_BOOKINGS_URL = '/pages/my-bookings/my-bookings'
+
 /** 兜底错误文案，非 ApiError 时使用 */
 const FALLBACK_DETAIL_ERROR = '资源加载失败，请稍后重试'
 const FALLBACK_SLOT_ERROR = '时间段加载失败，请稍后重试'
+const FALLBACK_SUBMIT_ERROR = '预约提交失败，请稍后重试'
+
 
 Page({
   data: {
@@ -78,6 +99,32 @@ Page({
     submitText: '请选择时间段',
     /** 预约按钮是否可点击 */
     canSubmit: false,
+    /** 是否正在提交（提交中禁用按钮，避免重复下单） */
+    submitting: false,
+    /** 提交失败的页面内提示；空串表示不展示 */
+    submitError: '',
+    /**
+     * 是否需要在下次显示本页时重新拉取时段。
+     * 预约成功后置为 true：那个时段已经被占掉，返回本页时不能再显示为可预约。
+     */
+    pendingSlotRefresh: false,
+  },
+
+  /**
+   * 每次显示都检查是否需要刷新时段。
+   *
+   * 为什么不在提交成功时直接刷新：成功后会跳转到我的预约页，等用户返回时
+   * 距离提交已经过了一段时间，期间可能又有别人约走了别的时段。
+   * 在「回来的那一刻」重新拉取，拿到的才是当前真实状态。
+   */
+  onShow() {
+    if (!this.data.pendingSlotRefresh) {
+      return
+    }
+    this.setData({ pendingSlotRefresh: false })
+    if (this.data.hasValidId && this.data.pageState === 'success') {
+      this.loadAvailability()
+    }
   },
 
   onLoad(query: Record<string, string | undefined>) {
@@ -210,9 +257,15 @@ Page({
   /** 依据当前选择刷新预约按钮的状态与文案 */
   applySubmitState() {
     const slot = this.data.selectedSlot
+    const submitting = this.data.submitting
     this.setData({
-      canSubmit: !!slot,
-      submitText: slot ? `预约 ${getTimeSlotLabel(slot)}` : '请选择时间段',
+      // 提交中一律不可点：接口已经发出，再点一次就是重复预约
+      canSubmit: !!slot && !submitting,
+      submitText: submitting
+        ? '提交中…'
+        : slot
+          ? `预约 ${getTimeSlotLabel(slot)}`
+          : '请选择时间段',
     })
   },
 
@@ -224,7 +277,12 @@ Page({
       return
     }
 
-    this.setData({ selectedDate: value, selectedWeekday: getWeekdayLabel(value) })
+    // 用户主动换了日期：上一条提交失败的提示已经过期
+    this.setData({
+      selectedDate: value,
+      selectedWeekday: getWeekdayLabel(value),
+      submitError: '',
+    })
     this.loadAvailability()
   },
 
@@ -240,48 +298,158 @@ Page({
     }
 
     const isReselect = isSameTimeSlot(this.data.selectedSlot, slot)
-    this.setData({ selectedSlot: isReselect ? null : slot })
+    // 用户改了选择：上一条失败提示说的是旧时段，继续留着会误导
+    this.setData({ selectedSlot: isReselect ? null : slot, submitError: '' })
     this.applySubmitState()
   },
 
   /**
-   * 提交预约。
+   * 提交预约（需求 §4.5、技术设计 §11）。
    *
-   * Phase 4 只交付按钮状态；Phase 5 在真正的提交之前补上第一道门槛
-   * ——「用户已登录」（需求 §4.5 提交前检查第 1 项、技术设计 §11 预约规则第 1 条）。
-   * 真正的预约提交（参数与时间校验 + POST /api/bookings）属于 Phase 6。
+   * 提交前检查的五项分工：
+   * 1. 用户已登录 —— 本方法第一步（未登录走 promptLogin）
+   * 2. 资源存在   —— 服务端判定（本页已成功加载过资源，但资源可能在用户停留期间下架）
+   * 3. 日期合法   —— 客户端预校验（validateBookingPayload）
+   * 4. 时间合法   —— 客户端预校验（含「不得早于当前时间」）
+   * 5. 时间段仍可用 —— 服务端判定（本页的时段状态是加载时的快照，可能已过期或被别人约走）
    *
    * 为什么用 showModal 而不是直接把用户推去登录页：
    * 用户可能只是误触；而且本页已经选好了日期与时段，直接跳走会让人以为选择丢了。
    * 先问一句，确认后再去登录——登录页是 push 进来的，返回时本页实例与已选时段都还在。
    */
-  onSubmit() {
+  async onSubmit() {
+    // 提交中再点一次就是重复预约，直接忽略（按钮此时也是禁用态）
+    if (this.data.submitting) {
+      return
+    }
+
     const slot = this.data.selectedSlot
     if (!slot) {
       return
     }
 
     if (!isLoggedIn()) {
-      wx.showModal({
-        title: '需要登录',
-        content: '登录后才能预约场地，是否现在去登录？',
-        confirmText: '去登录',
-        success: (res) => {
-          if (!res.confirm) {
-            return
-          }
-          wx.navigateTo({
-            url: '/pages/login/login',
-            fail: () => {
-              wx.showToast({ title: '页面跳转失败', icon: 'none' })
-            },
-          })
-        },
-      })
+      this.promptLogin()
       return
     }
 
-    wx.showToast({ title: '预约提交功能即将开放', icon: 'none' })
+    const payload: CreateBookingPayload = {
+      resourceId: this.data.resourceId,
+      date: this.data.selectedDate,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+    }
+
+    // 客户端预校验：只覆盖不依赖服务端数据就能判定的部分
+    const validation = validateBookingPayload(payload)
+    if (!validation.ok) {
+      this.showSubmitError(validation.message)
+      return
+    }
+
+    this.setData({ submitting: true, submitError: '' })
+    this.applySubmitState()
+
+    try {
+      const booking = await createBooking(payload)
+      this.afterSubmitSuccess(booking)
+    } catch (error) {
+      this.afterSubmitFailure(error)
+    }
+  },
+
+  /**
+   * 未登录时的引导：先问一句再去登录页。
+   * 抽成独立方法是因为两条路径都要用——用户本来就未登录，以及登录态被服务端判定为失效。
+   */
+  promptLogin() {
+    wx.showModal({
+      title: '需要登录',
+      content: '登录后才能预约场地，是否现在去登录？',
+      confirmText: '去登录',
+      success: (res) => {
+        if (!res.confirm) {
+          return
+        }
+        wx.navigateTo({
+          url: '/pages/login/login',
+          fail: () => {
+            wx.showToast({ title: '页面跳转失败', icon: 'none' })
+          },
+        })
+      },
+    })
+  },
+
+  /** 提交失败的统一展示：页面内提示条 + toast */
+  showSubmitError(message: string) {
+    this.setData({ submitError: message })
+    wx.showToast({ title: message, icon: 'none' })
+  },
+
+  /**
+   * 提交成功：提示并跳转到我的预约（需求 §4.5「成功：提示并跳转」）。
+   *
+   * 「我的预约」而不是「预约详情」：用户预约完的自然意图是「看我约到了什么」，
+   * 而预约详情页在 Phase 6 还是骨架，跳过去信息量为零，反而像出了错。
+   */
+  afterSubmitSuccess(booking: Booking) {
+    // 用户在提交期间可能切了日期——那种情况下当前页面上的选择不属于这次提交，不该被清掉
+    const isSameTarget =
+      this.data.resourceId === booking.resourceId && this.data.selectedDate === booking.date
+
+    this.setData({
+      submitting: false,
+      submitError: '',
+      // 该时段已经约掉了，留着选择只会让用户再点一次注定失败的按钮
+      selectedSlot: isSameTarget ? null : this.data.selectedSlot,
+      // 返回本页时重新拉时段，让刚约掉的那一格不再显示为可预约
+      pendingSlotRefresh: isSameTarget,
+    })
+    this.applySubmitState()
+
+    wx.showToast({ title: '预约成功', icon: 'success' })
+    setTimeout(() => {
+      wx.navigateTo({
+        url: MY_BOOKINGS_URL,
+        fail: () => {
+          wx.showToast({ title: '页面跳转失败', icon: 'none' })
+        },
+      })
+    }, SUBMIT_REDIRECT_DELAY)
+  },
+
+  /**
+   * 提交失败：按错误码分流，让用户知道「该换个时段」还是「稍后重试」。
+   * 见文件头设计判断 6。
+   */
+  afterSubmitFailure(error: unknown) {
+    const apiError = error instanceof ApiError ? error : null
+    const code = apiError ? apiError.code : 0
+    const message = apiError ? apiError.message : FALLBACK_SUBMIT_ERROR
+
+    this.setData({ submitting: false })
+    this.applySubmitState()
+    this.showSubmitError(message)
+
+    if (code === ApiErrorCode.UNAUTHORIZED) {
+      // 服务端说凭证已失效：本地继续保留「已登录」只会让用户反复碰壁
+      clearSession()
+      this.promptLogin()
+      return
+    }
+
+    if (code === BOOKING_ERROR_CODE.CONFLICT) {
+      // 时段状态已经变了，必须重取——否则那一格还显示为可预约，用户会反复点同一个必然失败的按钮。
+      // 注意：这里不清 submitError，页面上的原因提示要留着，用户才知道刚才为什么失败。
+      this.loadAvailability()
+      return
+    }
+
+    if (code === BOOKING_ERROR_CODE.RESOURCE_NOT_FOUND) {
+      // 资源没了：重新加载详情，落到 empty 态并只给「返回上一页」
+      this.loadDetail()
+    }
   },
 
   /** 资源信息区 error-state 的重试事件 */

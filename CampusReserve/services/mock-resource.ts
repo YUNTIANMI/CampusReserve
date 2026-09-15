@@ -8,11 +8,14 @@
  * 1. 数据形态严格对齐 types/resource.ts 的 `Resource` / `Availability`；
  * 2. 返回 Promise 并带模拟延迟，接口形态与 services/request.ts 一致（失败时 reject `ApiError`），
  *    使页面代码切换到真实接口时无需改动；
- * 3. Phase 4 追加资源详情与可用时间段，其中「已过期时段」按本机当前时间计算。
+ * 3. Phase 4 追加资源详情与可用时间段，其中「已过期时段」按本机当前时间计算；
+ * 4. Phase 6 起，`default` 模式的时段会叠加开发期预约表（services/mock-booking-store.ts），
+ *    使「刚创建成功的预约」立刻反映为 `BOOKED`——时段可用性的真源必须包含真实预约。
  */
 import type { Availability, Resource, ResourceQuery, TimeSlot, TimeSlotStatus } from '../types/resource'
 import { formatDate, toMinutes } from '../utils/date'
 import { MOCK_AVAIL_MODE_STORAGE_KEY, MOCK_MODE_STORAGE_KEY } from './config'
+import { overlayBookedSlots } from './mock-booking-store'
 import { ApiError, ApiErrorCode } from './request'
 
 /** 模拟网络延迟（毫秒），用于观察 loading 态 */
@@ -194,8 +197,12 @@ export function readMockAvailMode(): MockAvailMode {
  * 2. 已过期：日期是今天且时段开始时间不晚于当前时间，一律标为 `DISABLED`
  *    （技术设计 §11「时间不得早于当前时间」）。已过期优先于已约满——
  *    一个已经过去的时段，对用户就是「不可预约」，不必再区分它当初是否被约满。
+ *
+ * Phase 6 起对外导出：创建预约时服务端（此处由开发期数据源承担）要判定
+ * 「请求的时段是否仍在开放范围内、状态是否仍可预约」，判据必须与页面看到的一致，
+ * 否则会出现「页面显示可预约、提交却说不存在」的自相矛盾。
  */
-function buildDefaultSlots(resourceId: number, date: string): TimeSlot[] {
+export function buildDefaultSlots(resourceId: number, date: string): TimeSlot[] {
   const day = Number(date.slice(8, 10)) || 1
   const total = MOCK_SLOT_TEMPLATE.length
   const bookedFrom = (resourceId + day) % total
@@ -250,7 +257,13 @@ export function mockGetAvailability(resourceId: number, date: string): Promise<A
         return
       }
 
-      resolve({ resourceId, date, slots: buildDefaultSlots(resourceId, date) })
+      // default 模式：基础状态 + 叠加开发期已创建的预约
+      // （叠加这一步让「刚被约走的时段」立刻显示为已约满，见 mock-booking-store.ts）
+      resolve({
+        resourceId,
+        date,
+        slots: overlayBookedSlots(resourceId, date, buildDefaultSlots(resourceId, date)),
+      })
     }, MOCK_DELAY)
   })
 }

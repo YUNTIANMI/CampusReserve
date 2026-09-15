@@ -160,3 +160,14 @@
 .submit__summary--muted {
   color: var(--cr-color-text-muted);
 }
+
+/* 提交失败的原因提示：留在页面上，用户能反复看到 */
+.submit__error {
+  margin-bottom: var(--cr-space-sm);
+  padding: var(--cr-space-sm);
+  font-size: var(--cr-font-sm);
+  line-height: 1.6;
+  color: var(--cr-color-danger);
+  background-color: rgba(245, 34, 45, 0.08);
+  border-radius: var(--cr-radius-sm);
+}
