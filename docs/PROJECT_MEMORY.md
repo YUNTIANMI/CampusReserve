@@ -21,11 +21,11 @@
 
 ## 2. Current Phase
 
-当前阶段：Phase 2 - 首页（已完成，E2E 实测 47/47 通过）
+当前阶段：Phase 3 - 资源列表（已完成，E2E 实测 65/65 通过）
 
 当前任务：无
 
-下一阶段：Phase 3 - 资源列表
+下一阶段：Phase 4 - 资源详情与时间选择
 
 ## 3. Completed
 
@@ -64,15 +64,30 @@ Phase 2（首页）：
 - [x] 端到端测试：真实开发者工具中 47/47 通过（`tools/e2e/e2e-phase2.js`）
 - [x] 回归测试：Phase 1 端到端 36/36 通过
 
+Phase 3（资源列表）：
+- [x] `resource-list` 接入 `getResources({ type })`，渲染 `ResourceCard` 列表
+- [x] 分类筛选栏（`scroll-view` 横向 5 项：全部 + 4 类），激活态与 URL `category` 联动
+- [x] 筛选下推到数据源（不在本地过滤），切换分类真实重新请求
+- [x] loading / empty / error / success 四态互斥；筛选栏为静态内容，四态下均保持可用
+- [x] 卡片点击进入详情（携带正确 `id`）
+- [x] 下拉刷新（`onPullDownRefresh`）
+- [x] 非法 `category` 参数归一化为「全部」而非错误态
+- [x] 空态文案按筛选条件分流（全量空 →「重新加载」；分类空 → 引导换分类且不给无效按钮）
+- [x] 丢弃过期响应：快速切换分类时旧请求结果不覆盖新筛选
+- [x] 静态检查：`tsc --noEmit` 0 错误
+- [x] 端到端测试：真实开发者工具中 65/65 通过（`tools/e2e/e2e-phase3.js`）
+- [x] 回归测试：Phase 1 36/36、Phase 2 47/47 通过
+
 ## 4. In Progress
 
 暂无。
 
 ## 5. Next Tasks
 
-1. Phase 3：`resource-list` 接入 `getResources()`，渲染 `ResourceCard`
-2. Phase 3：分类筛选与 `category` 参数联动
-3. Phase 3：资源列表页四态与下拉刷新
+1. Phase 4：资源详情页图片展示与资源信息
+2. Phase 4：日期选择与 `TimeSlot` 组件（可用 / 不可用状态）
+3. Phase 4：获取指定日期可用时间段与选择时间
+4. Phase 4：预约按钮状态
 
 ## 6. Current Frontend State
 
@@ -101,23 +116,32 @@ AppID：`wxb97024eb0305368d`
 
 工具（`utils/`）：
 - `resource.ts`（Phase 2）：资源分类常量 `RESOURCE_TYPE_OPTIONS` 与 `getResourceTypeLabel()`
+- `resource.ts`（Phase 3 追加）：列表页筛选项 `RESOURCE_FILTER_OPTIONS`（首项「全部」，值为空串）、
+  类型守卫 `isResourceType()`、参数归一化 `normalizeResourceType()`
 
 页面：
 - `pages/index`（Phase 2 完成）：真实首页，含顶部区域、4 个分类入口、热门 / 推荐资源、
   四态与下拉刷新；点击资源卡进入详情，点击分类进入列表并带 `category` 参数
-- `pages/resource-list`：四态骨架，接收 `category` 参数（Phase 3 接入数据）
-- `pages/resource-detail`：接收 `id` 参数，参数缺失时展示错误态
+- `pages/resource-list`（Phase 3 完成）：真实列表页，含分类筛选栏、`ResourceCard` 列表、
+  四态与下拉刷新。两个关键设计：
+  1. **筛选栏是静态内容，不随四态变化**（与首页一致）——接口失败或结果为空时仍能切换分类，
+     避免「一次请求失败就整页不可用」；
+  2. **非法 `category` 归一化为「全部」而非错误态**——详情页缺少 `id` 就无事可做，
+     但列表页的筛选条件不满足时页面依然可用，一个脏链接不该把功能全部挡掉。
+  另：切换分类时比对请求发出时的 `category`，条件已变则丢弃该次过期响应。
+- `pages/resource-detail`：接收 `id` 参数，参数缺失时展示错误态（Phase 4 实现内容）
 - `pages/my-bookings`：待使用 / 已完成 / 已取消三个状态页签
 - `pages/booking-detail`：接收 `id` 参数，参数缺失时展示错误态
 
 组件：
 - 已创建：`loading-state`、`empty-state`（含操作事件）、`error-state`（含 `retry` 事件）
 - 已创建（Phase 2）：`resource-card`（资源卡片；事件名 `cardtap`，刻意不复用 `tap`
-  以避免与组件内原生 tap 冒泡重复触发；不硬编码路由，跳转由使用方决定）
+  以避免与组件内原生 tap 冒泡重复触发；不硬编码路由，跳转由使用方决定），
+  Phase 3 在列表页直接复用，组件本身无需改动
 - 待创建：`CategoryCard`、`TimeSlot`、`BookingCard`
 
-首页分类入口当前在页面内联实现，未抽 `CategoryCard`；资源列表页的分类筛选 UI 形态不同，
-待 Phase 3 一并决定是否抽取为组件。
+分类筛选 UI 目前在列表页内联实现（chip 形态，与首页的分类卡片入口形态不同），
+暂未抽取为 `CategoryCard`；`TimeSlot` 留待 Phase 4。
 
 ## 7. Current Backend State
 
@@ -225,7 +249,24 @@ API 设计以：
      再 `cli.bat auto --project <小程序目录>` 即可恢复。
    - 解析 `page.callMethod()` 调用 async 方法时，其返回的 Promise 无法被序列化；
      需要「触发页面方法并读状态」时，在同一次 `evaluate` 内先调用再读，可稳定捕获瞬时状态。
-   - 现成可用的端到端脚本与说明见 `tools/e2e/`（Phase 1 36/36、Phase 2 47/47 通过）。
+   - 现成可用的端到端脚本与说明见 `tools/e2e/`（Phase 1 36/36、Phase 2 47/47、Phase 3 65/65 通过）。
+
+6. **模拟器的路由过渡必须先收尾再发下一次导航（Phase 3 实测，极易误判为产品缺陷）**：
+   - `wx.navigateTo` / `wx.navigateBack` 的**栈顶路由更新很快，但整段过渡动画约 1.2 秒才
+     `onRouteDone`**。在过渡未结束时再发导航，会把模拟器的路由过渡**卡死约 10 秒**。
+   - 日志证据：点卡片后 0.5 秒就发返回，结果 `resource-detail` 的 `onRouteDone` 迟了 10 秒才到，
+     期间 `wx.navigateTo` 报 `navigateTo:fail timeout` 并触发页面的失败提示，而
+     `wx.navigateBack` 自身却立即回报 success。
+   - 对照实验：用 appservice 直接驱动导航时，首页↔列表↔详情各段过渡均为 **3~5ms**，完全正常。
+     即**该卡顿由测试节奏造成，不是产品缺陷**。
+   - 正确写法：每次导航后等路线落到目标页并静默约 1.4 秒再继续（`tools/e2e/e2e-phase3.js`
+     的 `waitForRouteSettled()`）。
+   - 另：`mp.navigateBack()` 实为 `changeRoute('navigateBack')`，**不接受 `delta`**，且会在页面
+     销毁瞬间抛 `Uncaught [object Object]`（抛错时导航其实已生效）。多级返回应改用
+     `mp.evaluate(() => wx.navigateBack({ delta }))`，按真实页面栈一次返回到位。
+   - 同类的时序问题（状态断言）：**点击后不能只等 `pageState` 变回原值**再断言。点击前页面本就处于
+     success，事件又要跨渲染层→AppService 传递，「等 success」会立刻命中点击前的旧值，于是读到
+     上一步的数据（Phase 3 实测因此误报 4 项）。应按「目标字段已变为期望值 **且** 状态为期望值」轮询。
 
 ## 11. Important Decisions
 
@@ -308,6 +349,7 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 ## 14. Last Updated
 
 更新时间：2026-09-15  
-最后完成任务：Phase 2 首页完成并通过端到端测试（真实开发者工具中 47/47 通过，
-Phase 1 回归 36/36 通过）；建立资源业务接口、开发期数据源与 `ResourceCard` 组件  
+最后完成任务：Phase 3 资源列表完成并通过端到端测试（真实开发者工具中 65/65 通过，
+Phase 1 / Phase 2 回归 36/36、47/47）；实现分类筛选栏、资源卡列表、空态文案分流与
+参数归一化，并摸清模拟器路由过渡时序（新增已知问题 6）  
 更新者：Developer（AI 协同）
