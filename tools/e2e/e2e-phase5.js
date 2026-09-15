@@ -713,12 +713,17 @@ async function simulateColdStart(mp) {
       detail = await waitForPageData(mp, DETAIL, (d) => !!d.selectedSlot)
       check('已选中一个可预约时段', !!detail && !!detail.selectedSlot, detail && detail.selectedSlot ? String(detail.selectedSlot.startTime) : 'null')
 
-      const feedback = await callSubmitAndReadFeedback(mp, false)
+      // Phase 6 起，已登录点预约会真正提交（提交本身与各类失败分支由 e2e-phase6.js 覆盖）。
+      // 本阶段的关注点只是「已登录不再被登录门槛拦住」，因此断言它确实进入了提交流程：
+      // 提交成功会跳转到我的预约页；若仍被门槛拦住，页面会停在原地弹「需要登录」。
+      const gate = await callSubmitAndReadFeedback(mp, false)
       check(
-        '已登录时点预约给出「功能即将开放」提示（真正的提交属于 Phase 6）',
-        feedback.toast === '预约提交功能即将开放',
-        String(feedback.toast),
+        '已登录时点预约不再弹出「需要登录」引导',
+        gate.modalTitle !== '需要登录',
+        String(gate.modalTitle),
       )
+      const submitted = await waitForRouteSettled(mp, MY_BOOKINGS, 15000)
+      check('已登录时可以提交预约（Phase 6 起为真实提交）', submitted === MY_BOOKINGS, String(submitted))
     }
 
     await goBackTo(mp, HOME)

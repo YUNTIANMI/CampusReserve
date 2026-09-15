@@ -31,15 +31,17 @@ node ./e2e-phase2.js ws://127.0.0.1:9420   # Phase 2：首页、分类入口、R
 node ./e2e-phase3.js ws://127.0.0.1:9420   # Phase 3：列表页、分类筛选、卡片列表、四态、下拉刷新
 node ./e2e-phase4.js ws://127.0.0.1:9420   # Phase 4：资源详情、日期条、时间段三态、选择与按钮状态
 node ./e2e-phase5.js ws://127.0.0.1:9420   # Phase 5：登录入口、一键登录流程、登录态保存、未登录引导
+node ./e2e-phase6.js ws://127.0.0.1:9420   # Phase 6：创建预约、成功提示与跳转、冲突与各类失败
 ```
 
-也可以用 npm 脚本：`npm run auto` / `npm run phase1` / `npm run phase2` / `npm run phase3` / `npm run phase4` / `npm run phase5`。
+也可以用 npm 脚本：`npm run auto` / `npm run phase1` … `npm run phase6`。
 
 `start-automation.js` 会自动定位开发者工具 CLI（可用命令行参数或 `WX_DEVTOOLS_CLI` 环境变量覆盖），
 并把工程根指向 `../../CampusReserve`。
 
 退出码 `0` 表示全部通过，输出末行为 `E2E_TEST = PASS`。
-当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`，Phase 3 `65/65`，Phase 4 `81/81`，Phase 5 `63/63`。
+当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`，Phase 3 `65/65`，Phase 4 `81/81`，
+Phase 5 `64/64`，Phase 6 `61/61`，合计 `354` 项断言。
 
 > Phase 1 的脚本自 Phase 3 起会先清除 `CR_MOCK_MODE`：`resource-list` 已接入真实数据源，
 > 不固定数据源模式就无法确定性断言。Phase 1 脚本对该页只覆盖「Phase 1 交付物」
@@ -49,17 +51,22 @@ node ./e2e-phase5.js ws://127.0.0.1:9420   # Phase 5：登录入口、一键登�
 ## 开发期数据源开关
 
 小程序端 `services/config.ts` 的 `USE_MOCK_DATA` 为 `true` 时，页面数据来自本地数据源，
-测试通过两个存储键注入不同响应（缺省均为正常态，脚本结束时都会清掉）：
+测试通过存储键注入不同响应（缺省均为正常态，脚本结束时都会清掉）：
 
 | 存储键 | 作用对象 | 取值 |
 | --- | --- | --- |
 | `CR_MOCK_MODE` | 资源列表、资源详情 | `success`（缺省）/ `empty` / `error` |
 | `CR_MOCK_AVAIL_MODE` | 可用时间段 | `default`（缺省）/ `full` / `none` / `error` |
 | `CR_MOCK_AUTH_MODE` | 登录（Phase 5） | `success`（缺省）/ `error` |
+| `CR_MOCK_BOOKING_MODE` | 创建预约（Phase 6） | `success`（缺省）/ `conflict` / `resource-missing` / `invalid-time` / `param-error` / `unauthorized` / `error` |
 
-三个键刻意分开：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
+这些键刻意分开：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
 登录的 `error` 指「登录失败」——用同一个键表达不了「详情正常但该日期时段为空」或
 「资源正常但登录失败」这类组合，而端到端测试需要分别控制它们。
+
+另有一个**数据键**（不是模式开关）：`CR_MOCK_BOOKINGS` 存放开发期已创建的预约
+（见 `services/mock-booking-store.ts`）。测试直接读它来核对「预约记录是否真的写进去了」，
+也在每次运行开始时清空它，避免多次运行累积把未来几天的时段占满。
 
 登录态本身（`CR_AUTH_TOKEN` / `CR_USER_INFO`）不走这套注入机制：它在 `store/auth.ts` 里
 既有缓存也有内存态，只写缓存不会生效，测试必须走真实登录流程，见第 19 条。
@@ -196,3 +203,28 @@ node ./e2e-phase5.js ws://127.0.0.1:9420   # Phase 5：登录入口、一键登�
     都必须先切到明天再取时段，见 `e2e-phase5.js` 的 `switchToTomorrow()`；
     不改日期直接取 `AVAILABLE` 会返回 0，连带一串断言失败。
     注意 Phase 4 的用例不受影响——它本身就先切了明天。
+
+25. **`await` 之后才弹出的 toast，临时替换法截获不到。**（Phase 6 实测）
+    预约成功的提示发生在 `await createBooking(...)` 之后（约 600ms），而 Phase 4/5 那种
+    「调用 `onSubmit()` → `finally` 里立刻还原 `wx.showToast`」的写法，同步部分一结束就还原了，
+    截获到的永远是 `null`。改用**常驻探针**：把 `wx.showToast` / `wx.showModal` 换成记录器
+    **并留在原地**，整段用例跑完再统一还原，见 `e2e-phase6.js` 的 `installFeedbackSpy()` /
+    `readFeedbackSpy()`。探针顺带用 `autoConfirm` 控制弹窗是否自动点确认——预约流程的
+    「需要登录」引导正是靠 `showModal` 的 `success` 回调跳转登录页，需要时把它置为 `true`。
+
+26. **「提交中…」这类瞬时状态要「调用后立刻读」，不要用固定 sleep 去赌。**
+    `onSubmit` 是 `async` 方法，其同步部分（含 `setData({ submitting: true })`）在首个 `await`
+    之前就执行完了，因此「在同一次 `evaluate` 里调用方法并紧接着读 `page.data`」可以稳定命中，
+    见 `callSubmitAndReadState()`。接口延迟只有 600ms，用 `sleep` 去卡这个窗口既慢又不可靠。
+
+27. **断言「异步刷新造成的变化」要轮询到收尾，不能读一次就下结论。**（Phase 6 首跑误报 1 项）
+    冲突后页面会重新拉取时段，而 `loadAvailability()` 会先把 `slotState` 置为 `loading`。
+    读到提交失败提示的那一刻刷新还没走完，直接断言 `slotState === 'success'` 必然读到 `loading`。
+    与第 5 条同理：要轮询到「目标字段已变为期望值」。
+
+28. **存活过久、且跨越多次源码重新编译的自动化会话会让 `page.data()` 报 `page node not found`。**
+    （Phase 6 实测）此时 `getCurrentPages()` 与 `mp.currentPage()` 都还正常（它们走路由信息），
+    唯独取页面节点数据失败——表现为测试一开始就连环中断，极易误判为脚本写错。
+    修法是重启自动化会话：`cli.bat close --project <小程序目录>` 后再
+    `node ./start-automation.js`。**改动较多源码、或会话已跨多轮改动时，跑测试前先重启一次**
+    最省时间。

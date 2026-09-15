@@ -635,17 +635,18 @@ function firstUnavailableIndex(slots) {
       JSON.stringify(toast),
     )
 
-    // 选中后点击给出反馈（真正的预约提交属于 Phase 6）
+    // 选中后按钮进入可点击态并给出正确文案
+    // （点击后的业务行为——未登录时的登录引导、已登录时的真实提交——属于 Phase 5 / Phase 6，
+    //  分别见 e2e-phase5.js / e2e-phase6.js，本阶段只负责按钮状态本身）
     check('再选一个可预约时段', await tapSlotByXPathIndex(mp, availIdx))
     data = await waitForDetailData(mp, (d) => d.selectedSlot !== null)
     check('按钮重新变为可点击', !!data && data.canSubmit === true, data ? String(data.canSubmit) : 'null')
-    toast = await callSubmitAndReadFeedback(mp)
     check(
-      '选中时段后点击按钮给出反馈（未登录时先弹「需要登录」引导，已登录时为「即将开放」提示）',
-      toast.patched &&
-        ((typeof toast.modalTitle === 'string' && toast.modalTitle === '需要登录') ||
-          (typeof toast.toast === 'string' && toast.toast.length > 0)),
-      JSON.stringify(toast),
+      '选中后按钮文案为「预约 HH:mm-HH:mm」',
+      !!data &&
+        typeof data.submitText === 'string' &&
+        /^预约 \d{2}:\d{2}-\d{2}:\d{2}$/.test(data.submitText),
+      data ? String(data.submitText) : 'null',
     )
 
     // ---------- 8. 跨日期清空选择 ----------
