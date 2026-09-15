@@ -40,6 +40,7 @@
 - 后端：Spring Boot 3.5.16 + Java 17，`GET /api/health` 验证通过
 - MySQL：确认 8.4.10 可用，选定 3308 实例并实测连接通过（数据层在 Phase 10 接入）
 - 文档体系：五个文档统一归入 `docs/`，编号固定为 01 需求 / 02 技术设计 / 03 数据库设计（待建）/ 04 开发计划 / 05 API 契约（待建）
+- 远端：GitHub `main` 分支已同步 Phase 0 全部提交（提交信息为中文 Conventional Commits）
 
 已在本阶段修正：`docs/` 编号冲突（原 03 / 04 / 05）按上表重新约定，`docs/PROJECT_MEMORY.md` 中原记录已随修正移除。
 
