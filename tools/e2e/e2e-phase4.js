@@ -317,36 +317,51 @@ async function clearAvailMode(mp) {
 }
 
 /**
- * 调用页面 onSubmit 并截获 showToast 的标题。
+ * 调用页面 onSubmit 并截获 showToast / showModal。
  *
- * 小程序 toast 由客户端渲染，自动化层拿不到；这里在 appservice 内临时替换 wx.showToast，
- * 用「是否弹出提示、提示内容是什么」来断言按钮的点击反馈，测完立即还原。
- * 返回值 patched=false 表示替换失败（此时 captured 不可信，断言会给出说明）。
+ * 小程序 toast 与 modal 都由客户端渲染，自动化层拿不到；这里在 appservice 内临时替换
+ * `wx.showToast` / `wx.showModal`，用「是否弹出提示、提示内容是什么」来断言按钮的点击反馈，
+ * 测完立即还原。**不触发 modal 的 success 回调**——否则确认后会跳到登录页，打乱后续流程。
+ * 返回值 patched=false 表示替换失败（此时捕获结果不可信，断言会给出说明）。
+ *
+ * 为什么要同时看两者：Phase 5 起未登录用户点预约会先弹「需要登录」引导（属正确的产品行为），
+ * 只有已登录才会走「功能即将开放」的 toast，单看 toast 会把正常行为误判为「点击无反馈」。
  */
-async function callSubmitAndReadToast(mp) {
+async function callSubmitAndReadFeedback(mp) {
   return mp.evaluate(() => {
     const pages = getCurrentPages()
     const current = pages[pages.length - 1]
-    let captured = null
+    let toast = null
+    let modalTitle = null
     let patched = false
-    const original = wx.showToast
+    const originalToast = wx.showToast
+    const originalModal = wx.showModal
     try {
       wx.showToast = function (options) {
-        captured = (options && options.title) || ''
+        toast = (options && options.title) || ''
       }
-      patched = wx.showToast !== original
+      wx.showModal = function (options) {
+        modalTitle = (options && options.title) || ''
+      }
+      patched = wx.showToast !== originalToast && wx.showModal !== originalModal
       current.onSubmit()
     } catch (e) {
-      captured = `ERROR:${e && e.message ? e.message : e}`
+      toast = `ERROR:${e && e.message ? e.message : e}`
     } finally {
       try {
-        wx.showToast = original
+        wx.showToast = originalToast
+      } catch (e) {
+        /* ignore */
+      }
+      try {
+        wx.showModal = originalModal
       } catch (e) {
         /* ignore */
       }
     }
     return {
-      captured,
+      toast,
+      modalTitle,
       patched,
       canSubmit: current.data.canSubmit,
       submitText: current.data.submitText,
@@ -613,17 +628,23 @@ function firstUnavailableIndex(slots) {
       pages[pages.length - 1].applySubmitState()
     })
     await sleep(400)
-    let toast = await callSubmitAndReadToast(mp)
-    check('未选时段时按钮禁用且点击无反馈', toast.patched && toast.canSubmit === false && toast.captured === null, JSON.stringify(toast))
+    let toast = await callSubmitAndReadFeedback(mp)
+    check(
+      '未选时段时按钮禁用且点击无反馈',
+      toast.patched && toast.canSubmit === false && toast.toast === null && toast.modalTitle === null,
+      JSON.stringify(toast),
+    )
 
-    // 选中后点击给出提示（真正的预约提交属于 Phase 6）
+    // 选中后点击给出反馈（真正的预约提交属于 Phase 6）
     check('再选一个可预约时段', await tapSlotByXPathIndex(mp, availIdx))
     data = await waitForDetailData(mp, (d) => d.selectedSlot !== null)
     check('按钮重新变为可点击', !!data && data.canSubmit === true, data ? String(data.canSubmit) : 'null')
-    toast = await callSubmitAndReadToast(mp)
+    toast = await callSubmitAndReadFeedback(mp)
     check(
-      '选中时段后点击按钮给出反馈',
-      toast.patched && typeof toast.captured === 'string' && toast.captured.length > 0,
+      '选中时段后点击按钮给出反馈（未登录时先弹「需要登录」引导，已登录时为「即将开放」提示）',
+      toast.patched &&
+        ((typeof toast.modalTitle === 'string' && toast.modalTitle === '需要登录') ||
+          (typeof toast.toast === 'string' && toast.toast.length > 0)),
       JSON.stringify(toast),
     )
 

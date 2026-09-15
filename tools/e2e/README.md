@@ -30,15 +30,16 @@ node ./e2e-phase1.js ws://127.0.0.1:9420   # Phase 1：路由、页面参数、�
 node ./e2e-phase2.js ws://127.0.0.1:9420   # Phase 2：首页、分类入口、ResourceCard、下拉刷新
 node ./e2e-phase3.js ws://127.0.0.1:9420   # Phase 3：列表页、分类筛选、卡片列表、四态、下拉刷新
 node ./e2e-phase4.js ws://127.0.0.1:9420   # Phase 4：资源详情、日期条、时间段三态、选择与按钮状态
+node ./e2e-phase5.js ws://127.0.0.1:9420   # Phase 5：登录入口、一键登录流程、登录态保存、未登录引导
 ```
 
-也可以用 npm 脚本：`npm run auto` / `npm run phase1` / `npm run phase2` / `npm run phase3` / `npm run phase4`。
+也可以用 npm 脚本：`npm run auto` / `npm run phase1` / `npm run phase2` / `npm run phase3` / `npm run phase4` / `npm run phase5`。
 
 `start-automation.js` 会自动定位开发者工具 CLI（可用命令行参数或 `WX_DEVTOOLS_CLI` 环境变量覆盖），
 并把工程根指向 `../../CampusReserve`。
 
 退出码 `0` 表示全部通过，输出末行为 `E2E_TEST = PASS`。
-当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`，Phase 3 `65/65`，Phase 4 `81/81`。
+当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`，Phase 3 `65/65`，Phase 4 `81/81`，Phase 5 `63/63`。
 
 > Phase 1 的脚本自 Phase 3 起会先清除 `CR_MOCK_MODE`：`resource-list` 已接入真实数据源，
 > 不固定数据源模式就无法确定性断言。Phase 1 脚本对该页只覆盖「Phase 1 交付物」
@@ -54,9 +55,14 @@ node ./e2e-phase4.js ws://127.0.0.1:9420   # Phase 4：资源详情、日期条�
 | --- | --- | --- |
 | `CR_MOCK_MODE` | 资源列表、资源详情 | `success`（缺省）/ `empty` / `error` |
 | `CR_MOCK_AVAIL_MODE` | 可用时间段 | `default`（缺省）/ `full` / `none` / `error` |
+| `CR_MOCK_AUTH_MODE` | 登录（Phase 5） | `success`（缺省）/ `error` |
 
-两个键刻意分开：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
-一个键表达不了「详情正常但该日期时段为空」这种组合。
+三个键刻意分开：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
+登录的 `error` 指「登录失败」——用同一个键表达不了「详情正常但该日期时段为空」或
+「资源正常但登录失败」这类组合，而端到端测试需要分别控制它们。
+
+登录态本身（`CR_AUTH_TOKEN` / `CR_USER_INFO`）不走这套注入机制：它在 `store/auth.ts` 里
+既有缓存也有内存态，只写缓存不会生效，测试必须走真实登录流程，见第 19 条。
 
 ## 实测踩坑（改动测试脚本前务必先读）
 
@@ -155,3 +161,38 @@ node ./e2e-phase4.js ws://127.0.0.1:9420   # Phase 4：资源详情、日期条�
     开发者工具是文件监听 + 增量编译，连续快速改动时，紧接着启动的自动化会话可能仍读到
     旧编译产物，表现为「代码改了但行为没变」，极易误判为修复无效。
     排查这类问题时可临时在 WXML 里插一个 `PROBE[...]` 之类的标记，确认当前跑的是新包。
+
+19. **登录态的真源是 store 的内存态，直接写 storage 不会生效。**（Phase 5 实测）
+    `store/auth.ts` 用模块级变量持有登录态，`wx.setStorageSync` 只写缓存、不影响内存态，
+    所以「往 storage 里塞一份 token 再断言页面已登录」必然失败——页面读的是内存态。
+    要建立登录态就得走真实的登录页流程，见 `e2e-phase5.js` 的 `loginViaPage()`。
+    反过来，验证「冷启动恢复登录态」时才先写 storage、再触发一次 App 的 `onLaunch`
+    （automator 没有 restart API，本项目也约定不使用 `mp.reLaunch`；`onLaunch` 与真实冷启动
+    执行的是同一段代码，是本机条件下最贴近的验证方式）。
+
+20. **toast 与 modal 都由客户端渲染，自动化层读不到。**
+    要断言「点击有没有反馈、反馈内容是什么」，只能在 appservice 内临时替换
+    `wx.showToast` / `wx.showModal` 记录参数，测完立即还原，见 `callSubmitAndReadFeedback()`。
+    需要模拟「用户点了确认」时，就在替换实现里直接调用 `options.success({ confirm: true })`。
+
+21. **登录成功后会延迟约 600ms 才返回上一页，等待返回必须轮询。**
+    固定 sleep 要么太短（读不到返回结果）要么太长（拖慢整套测试）；用
+    `waitForRouteSettled()` 轮询路由即可。另外点击登录后要**同时对「按钮文案从 `登录中…`
+    变回初始值」提前收敛**，否则失败分支会白等满超时，见 `tapLoginAndWatchLoading()`。
+
+22. **`store/auth.ts` 的内存态与 `app.globalData` 是同一份状态的两个读取点。**
+    自动化侧读登录态首选 `getApp().globalData.loginState`（最权威）；页面 `data` 里的
+    `loginState` 是各页面在 `onShow` 里同步过来的副本，刚跳转完可能还没刷新，
+    断言渲染结果时用页面 data，断言全局状态时用 `globalData`。
+
+23. **已经站在登录页时不要再 `navigateTo` 一次登录页。**（Phase 5 实测，会连带误报 1 项）
+    重复 push 会让页面栈变成 `[来源页, 登录页, 登录页]`，登录成功后页面里的
+    `navigateBack` 只退到第一个登录页，「返回来源页」这类断言就永远等不到目标。
+    进登录页统一走 `ensureOnLoginPage()`（当前已在登录页则直接复用），
+    不要在辅助函数里无条件 `navigateTo`。
+
+24. **mock 数据源会把「当天已过时」的时段标成 `DISABLED`，傍晚之后当天可预约时段可能为 0。**
+    这是技术设计 §11 的既定行为（不是缺陷）。因此凡是要断言「存在可预约时段」的用例，
+    都必须先切到明天再取时段，见 `e2e-phase5.js` 的 `switchToTomorrow()`；
+    不改日期直接取 `AVAILABLE` 会返回 0，连带一串断言失败。
+    注意 Phase 4 的用例不受影响——它本身就先切了明天。

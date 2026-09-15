@@ -8,7 +8,8 @@
     "phase1": "node ./e2e-phase1.js ws://127.0.0.1:9420",
     "phase2": "node ./e2e-phase2.js ws://127.0.0.1:9420",
     "phase3": "node ./e2e-phase3.js ws://127.0.0.1:9420",
-    "phase4": "node ./e2e-phase4.js ws://127.0.0.1:9420"
+    "phase4": "node ./e2e-phase4.js ws://127.0.0.1:9420",
+    "phase5": "node ./e2e-phase5.js ws://127.0.0.1:9420"
   },
   "devDependencies": {
     "miniprogram-automator": "^0.12.1"
