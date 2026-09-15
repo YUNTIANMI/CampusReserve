@@ -140,6 +140,8 @@ MySQL
 
 ## 7. Frontend Rules
 
+工程根目录：`CampusReserve/`（微信开发者工具必须打开该目录，**不是仓库根**）。
+
 目录职责：
 ```text
 pages/
@@ -250,6 +252,17 @@ Repository：
 - 边界情况
 
 无法测试时必须明确说明，不得声称测试通过。
+
+小程序端到端测试（在真实微信开发者工具中运行）：
+```bash
+cd tools/e2e
+npm install
+node ./start-automation.js          # 启动开发者工具自动化模式（端口 9420）
+node ./e2e-phase1.js                # 默认连接 ws://127.0.0.1:9420
+```
+
+测试脚本编写的硬约束（选择器无法穿透自定义组件、`page.xpath()` 未命中时返回占位对象、
+点击后需轮询路由）见 `tools/e2e/README.md`，改动测试前必读。
 
 ---
 

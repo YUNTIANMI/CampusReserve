@@ -21,11 +21,11 @@
 
 ## 2. Current Phase
 
-当前阶段：Phase 0 - 项目准备（已完成）
+当前阶段：Phase 1 - 微信小程序基础框架（已完成，E2E 实测 36/36 通过）
 
 当前任务：无
 
-下一阶段：Phase 1 - 微信小程序基础框架
+下一阶段：Phase 2 - 首页
 
 ## 3. Completed
 
@@ -41,16 +41,26 @@
 - [x] 确认 MySQL（连接实测通过）
 - [x] 推送 Phase 0 全部提交到 GitHub（远端 `main` 与本地一致）
 
+Phase 1（微信小程序基础框架）：
+- [x] 配置 5 条页面路由（`app.json`）
+- [x] 创建首页、资源列表、资源详情、我的预约、预约详情
+- [x] 建立基础状态组件 `loading-state` / `empty-state` / `error-state`
+- [x] 建立基础样式（`app.wxss` 设计变量 + 通用类）
+- [x] 建立统一请求服务（`services/config.ts`、`services/request.ts`）
+- [x] 建立 TypeScript 类型体系（`types/`）
+- [x] 静态检查：`tsc --noEmit` 0 错误；路由审计 25/25；请求服务单测 11/11 + 集成 2/2
+- [x] 端到端测试：真实开发者工具中 36/36 通过（`tools/e2e/e2e-phase1.js`）
+
 ## 4. In Progress
 
 暂无。
 
 ## 5. Next Tasks
 
-1. Phase 1：配置页面路由
-2. Phase 1：创建首页、资源列表、资源详情、我的预约、预约详情
-3. Phase 1：建立基础组件与基础样式
-4. Phase 1：建立统一请求服务与 TypeScript 类型
+1. Phase 2：首页顶部区域、分类入口
+2. Phase 2：热门资源、推荐资源
+3. Phase 2：`ResourceCard` 组件
+4. Phase 2：首页 Loading / Empty / Error 与下拉刷新
 
 ## 6. Current Frontend State
 
@@ -61,19 +71,29 @@ AppID：`wxb97024eb0305368d`
 - `app.ts` / `app.json` / `app.wxss` / `sitemap.json` / `tsconfig.json`
 - `project.config.json`（已启用 `useCompilerPlugins: ["typescript"]`）
 - `typings/`（微信小程序 API 类型定义，来自 `miniprogram-api-typings@5.2.3`）
-- `types/global.d.ts`（全局 ambient 类型：`LoginState`、`ResourceType`、`TimeSlotStatus`、`BookingStatus`、`UserInfo`）
 - 目录骨架：`pages/` `components/` `services/` `utils/` `types/` `store/`
 
-页面：
-- `pages/index`：已建立最小可运行页面（Phase 1 将替换为真实首页）
-- `resource-list`：未创建
-- `resource-detail`：未创建
-- `my-bookings`：未创建
-- `booking-detail`：未创建
-- `login`：未创建
+类型（`types/`，Phase 1）：
+- `api.ts`：统一响应体 `ApiResponse<T>`、`ApiError`
+- `page.ts`：页面四态 `PageState`（loading / success / empty / error）
+- `user.ts` / `resource.ts` / `booking.ts`：用户、资源、预约领域类型
+- `global.d.ts`：仅保留 `IAppOption`（全局 ambient 类型已迁至 `types/` 内具名模块）
+- `index.ts`：统一出口
 
-组件（全部未创建）：
-- `ResourceCard`、`CategoryCard`、`TimeSlot`、`BookingCard`、`EmptyState`、`LoadingState`、`ErrorState`
+请求服务（`services/`，Phase 1）：
+- `config.ts`：API 根地址与超时常量
+- `request.ts`：封装 `wx.request`，统一归一化为 `ApiError`（区分网络失败 / 超时 / HTTP 非 2xx / 业务 code ≠ 0）
+
+页面（Phase 1 全部已创建）：
+- `pages/index`：首页骨架，含到其余 4 个页面的真实路由入口
+- `pages/resource-list`：四态骨架，接收 `category` 参数
+- `pages/resource-detail`：接收 `id` 参数，参数缺失时展示错误态
+- `pages/my-bookings`：待使用 / 已完成 / 已取消三个状态页签
+- `pages/booking-detail`：接收 `id` 参数，参数缺失时展示错误态
+
+组件：
+- 已创建：`loading-state`、`empty-state`（含操作事件）、`error-state`（含 `retry` 事件）
+- 待创建（Phase 2 起）：`ResourceCard`、`CategoryCard`、`TimeSlot`、`BookingCard`
 
 ## 7. Current Backend State
 
@@ -149,6 +169,26 @@ API 设计以：
 
 3. 本机 3306 实例不可用（见 §8），后续任何数据库操作一律使用 3308 实例。
 
+4. **微信开发者工具必须以小程序工程目录为工程根打开（易踩，且会连带影响自动化测试）**：
+   - 工程根是 `CampusReserve/`，**不是仓库根**。若打开仓库根，编译会反复报
+     `app.json: 在项目根目录未找到 app.json`（code 10005），模拟器提示「模拟器启动失败」。
+     原因是 `app.json` 位于子目录 `CampusReserve/`。
+   - 该状态下 **AppService 正常、渲染层无页面**，表现为自动化测试里 `App.getPageStack = []`、
+     `getCurrentPages().length === 0`、日志出现 `[WXML bridge] ack timeout`，极易被误判为
+     「IDE 模拟器损坏」。Phase 1 的 E2E 首次失败即由该原因造成，切到正确工程根后恢复正常。
+   - 开发者工具会记住上次打开的路径，重启后仍可能打开错误目录；
+     用「项目 → 打开项目」或 CLI `cli.bat open --project "E:\WORK\CampusReserve\CampusReserve"` 切换。
+
+5. **miniprogram-automator 的两条硬约束（写小程序 E2E 测试必读）**：
+   - `page.$()` / `page.$$()` **无法进入自定义组件内部**，连 `<empty-state>` 这类组件标签本身都
+     查不到，因此 `.empty-state` / `.loading-state` / `.error-state` 一律匹配不到；
+     组件内部断言必须改用 `page.xpath()`。
+   - `page.xpath()` **未命中时不返回 `null`**，而是返回 `tagName` 为 `undefined`、尺寸 `0x0`、
+     `text()` 为空串的占位对象；直接做真假判断会永久为真，导致「组件未渲染却断言通过」的误判。
+     判定存在必须同时校验 `tagName` 为非空字符串且尺寸大于 0。
+   - 页面跳转断言不要只 `sleep` 固定时长，应轮询 `mp.currentPage().path` 直到路由变化。
+   - 现成可用的端到端脚本与说明见 `tools/e2e/`（Phase 1 实测 36/36 通过）。
+
 ## 11. Important Decisions
 
 采用：
@@ -175,13 +215,16 @@ docs/
 └── PROJECT_MEMORY.md         # 当前状态（本文件）
 ```
 
-仓库结构（Phase 0 确立）：
+仓库结构（Phase 0 确立，Phase 1 追加 `tools/`）：
 ```text
 CampusReserve/          # 仓库根
-├── CampusReserve/      # 微信小程序工程
+├── CampusReserve/      # 微信小程序工程（开发者工具打开这里）
 ├── backend/            # Spring Boot 后端
-└── docs/               # 全部项目文档
+├── docs/               # 全部项目文档
+└── tools/e2e/          # 小程序端到端测试（基于 miniprogram-automator，不参与小程序打包）
 ```
+
+`tools/` 与小程序工程相互独立：测试脚本放在仓库根可避免被开发者工具打包进小程序包。
 
 Git 提交规范：中文 Conventional Commits，`<type>(<scope>): <中文简述>`。
 Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
@@ -219,5 +262,6 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 ## 14. Last Updated
 
 更新时间：2026-09-15  
-最后完成任务：文档目录与编号统一（五个文档归入 `docs/`）、MySQL 连接实测确认、Phase 0 提交推送到 GitHub  
+最后完成任务：Phase 1 微信小程序基础框架完成并通过端到端测试（真实开发者工具中 36/36 通过），
+建立 `tools/e2e/` 端到端测试工程  
 更新者：Developer（AI 协同）
