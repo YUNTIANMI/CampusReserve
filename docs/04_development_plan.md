@@ -66,18 +66,28 @@
 
 # Phase 2：首页
 
-- [ ] 顶部区域
-- [ ] 分类入口
-- [ ] 热门资源
-- [ ] 推荐资源
-- [ ] `ResourceCard`
-- [ ] Loading
-- [ ] Empty
-- [ ] Error
-- [ ] 下拉刷新
+- [x] 顶部区域
+- [x] 分类入口
+- [x] 热门资源
+- [x] 推荐资源
+- [x] `ResourceCard`
+- [x] Loading
+- [x] Empty
+- [x] Error
+- [x] 下拉刷新
 
 验收：
 首页正常展示，点击资源可进入列表/详情。
+
+实现说明：
+- 数据经 `services/resource.ts`（`getResources`）获取，调用链 Page → Service → API。
+- 后端业务 API 属于 Phase 10，本阶段由 `services/config.ts` 的 `USE_MOCK_DATA` 开关切到
+  `services/mock-resource.ts` 的本地数据源；联调时把开关改为 `false` 即可切到真实接口，页面代码无需改动。
+- 热门 / 推荐为前端临时划分（前 4 条热门、其余推荐）。`docs/05_api_contract.md` 确定后，
+  若后端提供独立的热门 / 推荐语义，只需调整 `pages/index/index.ts` 的 `renderResources`。
+- 静态检查：`tsc --noEmit` 0 错误。
+- 端到端测试：真实开发者工具中 47/47 通过（`tools/e2e/e2e-phase2.js`）；
+  Phase 1 回归 36/36 通过（`tools/e2e/e2e-phase1.js`）。
 
 ---
 

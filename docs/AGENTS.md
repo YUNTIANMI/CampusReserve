@@ -258,11 +258,13 @@ Repository：
 cd tools/e2e
 npm install
 node ./start-automation.js          # 启动开发者工具自动化模式（端口 9420）
-node ./e2e-phase1.js                # 默认连接 ws://127.0.0.1:9420
+node ./e2e-phase1.js                # Phase 1：路由、页面参数、四态组件、页签
+node ./e2e-phase2.js                # Phase 2：首页、分类入口、ResourceCard、下拉刷新
 ```
 
-测试脚本编写的硬约束（选择器无法穿透自定义组件、`page.xpath()` 未命中时返回占位对象、
-点击后需轮询路由）见 `tools/e2e/README.md`，改动测试前必读。
+测试脚本编写的硬约束（选择器无法穿透自定义组件、`page.xpath()` 的占位返回与谓词能力、
+不可使用 `reLaunch`、路由断言须读 appservice 页面栈）见 `tools/e2e/README.md`，
+改动测试前必读。
 
 ---
 

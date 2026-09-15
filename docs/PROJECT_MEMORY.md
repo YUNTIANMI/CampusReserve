@@ -21,11 +21,11 @@
 
 ## 2. Current Phase
 
-当前阶段：Phase 1 - 微信小程序基础框架（已完成，E2E 实测 36/36 通过）
+当前阶段：Phase 2 - 首页（已完成，E2E 实测 47/47 通过）
 
 当前任务：无
 
-下一阶段：Phase 2 - 首页
+下一阶段：Phase 3 - 资源列表
 
 ## 3. Completed
 
@@ -51,16 +51,28 @@ Phase 1（微信小程序基础框架）：
 - [x] 静态检查：`tsc --noEmit` 0 错误；路由审计 25/25；请求服务单测 11/11 + 集成 2/2
 - [x] 端到端测试：真实开发者工具中 36/36 通过（`tools/e2e/e2e-phase1.js`）
 
+Phase 2（首页）：
+- [x] 顶部区域（项目名、副标题、「我的预约」入口）
+- [x] 分类入口（4 类，跳转资源列表并携带 `category` 参数）
+- [x] 热门资源、推荐资源区块
+- [x] `ResourceCard` 组件（`components/resource-card/`，无图时展示类型占位）
+- [x] 资源区 loading / empty / error / success 四态互斥
+- [x] 下拉刷新（`enablePullDownRefresh` + `onPullDownRefresh`）
+- [x] 数据层：`services/resource.ts`（业务接口）+ `services/mock-resource.ts`（开发期数据源）
+  + `utils/resource.ts`（资源分类常量与中文标签）
+- [x] 静态检查：`tsc --noEmit` 0 错误
+- [x] 端到端测试：真实开发者工具中 47/47 通过（`tools/e2e/e2e-phase2.js`）
+- [x] 回归测试：Phase 1 端到端 36/36 通过
+
 ## 4. In Progress
 
 暂无。
 
 ## 5. Next Tasks
 
-1. Phase 2：首页顶部区域、分类入口
-2. Phase 2：热门资源、推荐资源
-3. Phase 2：`ResourceCard` 组件
-4. Phase 2：首页 Loading / Empty / Error 与下拉刷新
+1. Phase 3：`resource-list` 接入 `getResources()`，渲染 `ResourceCard`
+2. Phase 3：分类筛选与 `category` 参数联动
+3. Phase 3：资源列表页四态与下拉刷新
 
 ## 6. Current Frontend State
 
@@ -73,27 +85,39 @@ AppID：`wxb97024eb0305368d`
 - `typings/`（微信小程序 API 类型定义，来自 `miniprogram-api-typings@5.2.3`）
 - 目录骨架：`pages/` `components/` `services/` `utils/` `types/` `store/`
 
-类型（`types/`，Phase 1）：
+类型（`types/`）：
 - `api.ts`：统一响应体 `ApiResponse<T>`、`ApiError`
 - `page.ts`：页面四态 `PageState`（loading / success / empty / error）
 - `user.ts` / `resource.ts` / `booking.ts`：用户、资源、预约领域类型
+  （`resource.ts` 另含 Phase 2 新增的查询参数 `ResourceQuery`）
 - `global.d.ts`：仅保留 `IAppOption`（全局 ambient 类型已迁至 `types/` 内具名模块）
 - `index.ts`：统一出口
 
-请求服务（`services/`，Phase 1）：
-- `config.ts`：API 根地址与超时常量
+服务（`services/`）：
+- `config.ts`：API 根地址、超时常量，以及开发期数据源开关 `USE_MOCK_DATA` 与模式存储键
 - `request.ts`：封装 `wx.request`，统一归一化为 `ApiError`（区分网络失败 / 超时 / HTTP 非 2xx / 业务 code ≠ 0）
+- `resource.ts`（Phase 2）：资源业务接口 `getResources(query)`，数据来源由 `USE_MOCK_DATA` 决定
+- `mock-resource.ts`（Phase 2）：开发期本地资源数据源，支持 success / empty / error 三种模式
 
-页面（Phase 1 全部已创建）：
-- `pages/index`：首页骨架，含到其余 4 个页面的真实路由入口
-- `pages/resource-list`：四态骨架，接收 `category` 参数
+工具（`utils/`）：
+- `resource.ts`（Phase 2）：资源分类常量 `RESOURCE_TYPE_OPTIONS` 与 `getResourceTypeLabel()`
+
+页面：
+- `pages/index`（Phase 2 完成）：真实首页，含顶部区域、4 个分类入口、热门 / 推荐资源、
+  四态与下拉刷新；点击资源卡进入详情，点击分类进入列表并带 `category` 参数
+- `pages/resource-list`：四态骨架，接收 `category` 参数（Phase 3 接入数据）
 - `pages/resource-detail`：接收 `id` 参数，参数缺失时展示错误态
 - `pages/my-bookings`：待使用 / 已完成 / 已取消三个状态页签
 - `pages/booking-detail`：接收 `id` 参数，参数缺失时展示错误态
 
 组件：
 - 已创建：`loading-state`、`empty-state`（含操作事件）、`error-state`（含 `retry` 事件）
-- 待创建（Phase 2 起）：`ResourceCard`、`CategoryCard`、`TimeSlot`、`BookingCard`
+- 已创建（Phase 2）：`resource-card`（资源卡片；事件名 `cardtap`，刻意不复用 `tap`
+  以避免与组件内原生 tap 冒泡重复触发；不硬编码路由，跳转由使用方决定）
+- 待创建：`CategoryCard`、`TimeSlot`、`BookingCard`
+
+首页分类入口当前在页面内联实现，未抽 `CategoryCard`；资源列表页的分类筛选 UI 形态不同，
+待 Phase 3 一并决定是否抽取为组件。
 
 ## 7. Current Backend State
 
@@ -179,15 +203,29 @@ API 设计以：
    - 开发者工具会记住上次打开的路径，重启后仍可能打开错误目录；
      用「项目 → 打开项目」或 CLI `cli.bat open --project "E:\WORK\CampusReserve\CampusReserve"` 切换。
 
-5. **miniprogram-automator 的两条硬约束（写小程序 E2E 测试必读）**：
-   - `page.$()` / `page.$$()` **无法进入自定义组件内部**，连 `<empty-state>` 这类组件标签本身都
-     查不到，因此 `.empty-state` / `.loading-state` / `.error-state` 一律匹配不到；
-     组件内部断言必须改用 `page.xpath()`。
+5. **miniprogram-automator 的硬约束（写小程序 E2E 测试必读，Phase 2 补充）**：
+   - `page.$()` / `page.$$()` **无法进入自定义组件内部**，连 `<empty-state>` / `<resource-card>`
+     这类组件标签本身都查不到；组件内部断言必须改用 `page.xpath()`。
    - `page.xpath()` **未命中时不返回 `null`**，而是返回 `tagName` 为 `undefined`、尺寸 `0x0`、
-     `text()` 为空串的占位对象；直接做真假判断会永久为真，导致「组件未渲染却断言通过」的误判。
-     判定存在必须同时校验 `tagName` 为非空字符串且尺寸大于 0。
-   - 页面跳转断言不要只 `sleep` 固定时长，应轮询 `mp.currentPage().path` 直到路由变化。
-   - 现成可用的端到端脚本与说明见 `tools/e2e/`（Phase 1 实测 36/36 通过）。
+     `text()` 为空串的占位对象。判定存在必须同时校验 `tagName` 为非空字符串且尺寸大于 0，
+     否则会出现「组件没渲染却断言通过」的假成功。
+   - `page.xpath()` **支持位置谓词 `(//x)[n]` 与嵌套谓词 `[.//y[contains(text(),"...")]]`**，
+     可用于统计渲染层元素数量、按文案精确定位节点。这是 E2E 里最可靠的计数手段。
+   - `selectAllComponents()` **不可用于计数**：在 automator 的 evaluate 上下文中恒返回 `0`
+     （连 `.hero__action` 这类普通 view 也是 0），实测无效。
+   - **不要使用 `mp.reLaunch()`**：页面被销毁时 automator 内部会直接解构
+     `getPageMetaByWebviewId(...)` 的返回值，该值为 `null` 时整条连接抛错、测试中断；
+     改用页面自身的方法（如 `loadResources()`）触发重新加载。
+   - 路由断言不要依赖 `mp.currentPage().path`：它取自 automator 内部维护的 pageStack，
+     在刚 `navigateBack` 后可能与真实状态不同步，导致跳转断言偶发误判（Phase 2 实测踩到）；
+     应在 appservice 内直接读 `getCurrentPages()` 栈顶的 `route`。
+   - **IDE 里若同时开着多个项目窗口**（例如残留的仓库根窗口），自动化会连到错误窗口，
+     表现为页面栈为空、`getCurrentPages().length === 0`、`currentPage` 报
+     `getPageMetaByWebviewId(...) is null`。用 `cli.bat close --project <错误目录>` 关掉后，
+     再 `cli.bat auto --project <小程序目录>` 即可恢复。
+   - 解析 `page.callMethod()` 调用 async 方法时，其返回的 Promise 无法被序列化；
+     需要「触发页面方法并读状态」时，在同一次 `evaluate` 内先调用再读，可稳定捕获瞬时状态。
+   - 现成可用的端到端脚本与说明见 `tools/e2e/`（Phase 1 36/36、Phase 2 47/47 通过）。
 
 ## 11. Important Decisions
 
@@ -229,6 +267,14 @@ CampusReserve/          # 仓库根
 Git 提交规范：中文 Conventional Commits，`<type>(<scope>): <中文简述>`。
 Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 
+开发期数据源（Phase 2 引入，临时机制）：
+- 前端页面先于后端实现，`services/config.ts` 的 `USE_MOCK_DATA` 为 `true` 时，
+  由 `services/mock-resource.ts` 提供与 `Resource` 类型一致的本地数据，
+  使页面在后端 API（Phase 10）落地前即可验证 success / empty / error 三种展示。
+- 该开关只决定数据来源，页面与组件代码不感知；后端联调时改为 `false` 即切到真实接口。
+- 存储键 `CR_MOCK_MODE`（`success` | `empty` | `error`）供调试与端到端测试注入，
+  属开发期机制，联调前应连同开关一并移除。
+
 当前不使用：
 - Redis
 - MQ
@@ -262,6 +308,6 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 ## 14. Last Updated
 
 更新时间：2026-09-15  
-最后完成任务：Phase 1 微信小程序基础框架完成并通过端到端测试（真实开发者工具中 36/36 通过），
-建立 `tools/e2e/` 端到端测试工程  
+最后完成任务：Phase 2 首页完成并通过端到端测试（真实开发者工具中 47/47 通过，
+Phase 1 回归 36/36 通过）；建立资源业务接口、开发期数据源与 `ResourceCard` 组件  
 更新者：Developer（AI 协同）
