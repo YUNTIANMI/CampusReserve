@@ -1,7 +1,40 @@
-.placeholder__divider {
-  margin: 20rpx 0;
+/* ---------- 分类筛选栏 ---------- */
+
+/* scroll-view 横向滚动容器：enable-flex 使 display: flex 对其内容生效 */
+.filter {
+  display: flex;
+  margin-bottom: var(--cr-space-md);
 }
 
-.nav {
-  margin-top: 48rpx;
+.filter__item {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 64rpx;
+  padding: 0 var(--cr-space-md);
+  margin-right: var(--cr-space-sm);
+  background-color: var(--cr-color-surface);
+  border-radius: 999rpx;
+}
+
+.filter__item:last-child {
+  margin-right: 0;
+}
+
+.filter__item--hover {
+  background-color: var(--cr-color-hover);
+}
+
+.filter__item--active {
+  background-color: var(--cr-color-primary);
+}
+
+.filter__item-text {
+  font-size: var(--cr-font-sm);
+  color: var(--cr-color-text-secondary);
+}
+
+/* 激活项文字用白色：覆盖上一条的次级文字色 */
+.filter__item--active .filter__item-text {
+  color: #ffffff;
 }

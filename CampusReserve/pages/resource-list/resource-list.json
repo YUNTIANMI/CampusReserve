@@ -2,7 +2,8 @@
   "usingComponents": {
     "loading-state": "/components/loading-state/loading-state",
     "empty-state": "/components/empty-state/empty-state",
-    "error-state": "/components/error-state/error-state"
+    "error-state": "/components/error-state/error-state",
+    "resource-card": "/components/resource-card/resource-card"
   },
   "navigationBarTitleText": "资源列表",
   "enablePullDownRefresh": true
