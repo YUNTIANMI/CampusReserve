@@ -54,3 +54,14 @@ export const MOCK_MODE_STORAGE_KEY = 'CR_MOCK_MODE'
  * - `error`：请求失败，用于验证时间段的错误态与重试
  */
 export const MOCK_AVAIL_MODE_STORAGE_KEY = 'CR_MOCK_AVAIL_MODE'
+
+/**
+ * 开发期「登录」数据源模式存储键，取值 'success' | 'error'。
+ *
+ * - `success`：默认，模拟登录成功，返回固定用户
+ * - `error`：模拟登录失败，用于验证登录页的失败提示与重试
+ *
+ * 为什么单独一个键：登录失败与「资源接口失败」是两回事，
+ * 端到端测试需要在不影响其他数据源的前提下单独把登录打失败。
+ */
+export const MOCK_AUTH_MODE_STORAGE_KEY = 'CR_MOCK_AUTH_MODE'

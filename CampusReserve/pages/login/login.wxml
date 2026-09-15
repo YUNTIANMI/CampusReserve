@@ -1,0 +1,41 @@
+<view class="cr-page">
+  <!-- 未登录：说明 + 微信一键登录 -->
+  <block wx:if="{{loginState === 'LOGGED_OUT'}}">
+    <view class="login-intro">
+      <view class="login-intro__title">登录 CampusReserve</view>
+      <view class="login-intro__desc">登录后即可预约场地、查看和管理自己的预约。</view>
+      <view class="login-intro__tips">使用微信一键登录，无需注册。</view>
+    </view>
+
+    <view class="login-error" wx:if="{{errorMessage}}">
+      <text class="login-error__text">{{errorMessage}}</text>
+      <text class="login-error__hint">可点击下方按钮重试</text>
+    </view>
+
+    <button
+      class="cr-btn cr-btn--primary cr-btn--block"
+      disabled="{{submitting}}"
+      bindtap="onLogin"
+    >{{submitting ? '登录中…' : '微信一键登录'}}</button>
+  </block>
+
+  <!-- 已登录：用户信息展示 + 退出登录 -->
+  <block wx:else>
+    <view class="profile">
+      <view class="profile__avatar">{{avatarText}}</view>
+      <view class="profile__meta">
+        <view class="profile__name">{{userInfo.nickname}}</view>
+        <view class="profile__id">用户 ID：{{userInfo.id}}</view>
+      </view>
+    </view>
+
+    <view class="cr-section__desc">已登录，可以返回继续预约。</view>
+
+    <view
+      class="cr-btn cr-btn--ghost cr-btn--block logout"
+      hover-class="cr-hover"
+      hover-stay-time="80"
+      bindtap="onLogout"
+    >退出登录</view>
+  </block>
+</view>

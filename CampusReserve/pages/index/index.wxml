@@ -16,6 +16,21 @@
     </view>
   </view>
 
+  <!-- 用户区：登录入口 / 用户信息展示（Phase 5） -->
+  <view
+    class="user-bar"
+    hover-class="user-bar--hover"
+    hover-stay-time="80"
+    bindtap="onTapUser"
+  >
+    <view class="user-bar__avatar">{{avatarText}}</view>
+    <view class="user-bar__meta">
+      <view class="user-bar__name">{{userName}}</view>
+      <view class="user-bar__hint">{{userHint}}</view>
+    </view>
+    <text class="user-bar__arrow">›</text>
+  </view>
+
   <!-- 分类入口 -->
   <view class="cr-section">
     <view class="cr-section__title">资源分类</view>

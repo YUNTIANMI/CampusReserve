@@ -1,6 +1,7 @@
 /// <reference path="./typings/index.d.ts" />
 
 import { API_BASE_URL } from './services/config'
+import { getLoginState, getUserInfo, restoreSession } from './store/auth'
 
 App<IAppOption>({
   globalData: {
@@ -12,6 +13,13 @@ App<IAppOption>({
   },
 
   onLaunch() {
+    // 从本地缓存恢复登录态（技术设计 §9：只缓存必要数据）。
+    // 缓存不完整时 store 会统一回到未登录并清掉残留，不会留下「已登录但没有凭证」的状态。
+    restoreSession()
+    // store 内部已尝试同步 globalData，但 onLaunch 阶段 getApp() 未必可用，
+    // 这里用 this 再兜一次，确保 globalData 与 store 不出现两份互相漂移的数据。
+    this.globalData.loginState = getLoginState()
+    this.globalData.userInfo = getUserInfo()
     console.log('[CampusReserve] app onLaunch')
   },
 

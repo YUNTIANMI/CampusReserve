@@ -102,3 +102,57 @@
   font-size: var(--cr-font-sm);
   color: var(--cr-color-text-muted);
 }
+
+/* ---------- 用户区（Phase 5） ---------- */
+
+.user-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--cr-space-lg);
+  padding: var(--cr-space-md);
+  background-color: var(--cr-color-surface);
+  border-radius: var(--cr-radius-md);
+}
+
+.user-bar--hover {
+  background-color: var(--cr-color-hover);
+}
+
+.user-bar__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 80rpx;
+  height: 80rpx;
+  margin-right: var(--cr-space-md);
+  font-size: var(--cr-font-lg);
+  font-weight: 600;
+  color: #ffffff;
+  background-color: var(--cr-color-primary);
+  border-radius: 50%;
+}
+
+.user-bar__meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-bar__name {
+  font-size: var(--cr-font-md);
+  font-weight: 600;
+  color: var(--cr-color-text);
+}
+
+.user-bar__hint {
+  margin-top: 4rpx;
+  font-size: var(--cr-font-sm);
+  color: var(--cr-color-text-muted);
+}
+
+.user-bar__arrow {
+  flex: none;
+  margin-left: var(--cr-space-sm);
+  font-size: var(--cr-font-lg);
+  color: var(--cr-color-text-muted);
+}

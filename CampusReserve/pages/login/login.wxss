@@ -1,0 +1,92 @@
+/* ---------- 未登录：说明区 ---------- */
+
+.login-intro {
+  padding: var(--cr-space-xl) 0 var(--cr-space-lg);
+}
+
+.login-intro__title {
+  font-size: var(--cr-font-xxl);
+  font-weight: 600;
+  color: var(--cr-color-text);
+}
+
+.login-intro__desc {
+  margin-top: var(--cr-space-sm);
+  font-size: var(--cr-font-md);
+  color: var(--cr-color-text-secondary);
+}
+
+.login-intro__tips {
+  margin-top: var(--cr-space-xs);
+  font-size: var(--cr-font-sm);
+  color: var(--cr-color-text-muted);
+}
+
+/* ---------- 登录失败提示 ---------- */
+
+.login-error {
+  margin-bottom: var(--cr-space-md);
+  padding: var(--cr-space-md);
+  background-color: #fff1f0;
+  border-radius: var(--cr-radius-md);
+}
+
+.login-error__text {
+  display: block;
+  font-size: var(--cr-font-md);
+  color: var(--cr-color-danger);
+}
+
+.login-error__hint {
+  display: block;
+  margin-top: var(--cr-space-xs);
+  font-size: var(--cr-font-sm);
+  color: var(--cr-color-text-muted);
+}
+
+/* ---------- 已登录：用户信息 ---------- */
+
+.profile {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--cr-space-md);
+  padding: var(--cr-space-lg) var(--cr-space-md);
+  background-color: var(--cr-color-surface);
+  border-radius: var(--cr-radius-md);
+}
+
+.profile__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 112rpx;
+  height: 112rpx;
+  margin-right: var(--cr-space-md);
+  font-size: var(--cr-font-xl);
+  font-weight: 600;
+  color: #ffffff;
+  background-color: var(--cr-color-primary);
+  border-radius: 50%;
+}
+
+.profile__meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile__name {
+  font-size: var(--cr-font-lg);
+  font-weight: 600;
+  color: var(--cr-color-text);
+}
+
+.profile__id {
+  margin-top: 8rpx;
+  font-size: var(--cr-font-sm);
+  color: var(--cr-color-text-muted);
+}
+
+.logout {
+  margin-top: var(--cr-space-lg);
+}

@@ -1,11 +1,10 @@
 <view class="cr-page">
   <view class="cr-section">
     <view class="cr-section__title">我的预约</view>
-    <view class="cr-section__desc">
-      Phase 1 建立页面骨架与状态切换；Phase 7 接入预约列表接口并渲染预约卡片。
-    </view>
+    <view class="cr-section__desc">登录后可查看与管理自己的预约。</view>
   </view>
 
+  <!-- 页签在未登录时也保持渲染：让用户看到这个页面能做什么，而不是只剩一个按钮 -->
   <view class="tabs">
     <view
       class="tabs__item {{activeStatus === item.status ? 'tabs__item--active' : ''}}"
@@ -18,16 +17,27 @@
     >{{item.label}}</view>
   </view>
 
+  <!-- 未登录：引导登录，不展示预约内容 -->
   <empty-state
-    text="{{emptyText}}"
-    description="预约数据尚未接入（Phase 7 实现），当前展示空状态。"
+    wx:if="{{loginState === 'LOGGED_OUT'}}"
+    text="登录后查看我的预约"
+    description="我的预约属于个人数据，登录后即可查看待使用、已完成与已取消的预约。"
+    action-text="去登录"
+    bind:action="onGoLogin"
   />
 
-  <view class="cr-section nav">
-    <view class="cr-section__title">骨架导航</view>
-    <view class="cr-section__desc">用于验证页面路由。</view>
-    <view class="cr-btn cr-btn--primary cr-btn--block" hover-class="cr-hover" bindtap="onOpenDetail">
-      进入预约详情（示例 id={{sampleBookingId}}）
+  <block wx:else>
+    <empty-state
+      text="{{emptyText}}"
+      description="预约数据尚未接入（Phase 7 实现），当前展示空状态。"
+    />
+
+    <view class="cr-section nav">
+      <view class="cr-section__title">骨架导航</view>
+      <view class="cr-section__desc">用于验证页面路由。</view>
+      <view class="cr-btn cr-btn--primary cr-btn--block" hover-class="cr-hover" bindtap="onOpenDetail">
+        进入预约详情（示例 id={{sampleBookingId}}）
+      </view>
     </view>
-  </view>
+  </block>
 </view>

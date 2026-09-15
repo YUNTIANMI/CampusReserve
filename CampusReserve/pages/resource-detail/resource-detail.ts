@@ -25,6 +25,7 @@
  */
 import { getAvailability, getResourceDetail } from '../../services/resource'
 import { ApiError } from '../../services/request'
+import { isLoggedIn } from '../../store/auth'
 import { buildDateOptions, getWeekdayLabel } from '../../utils/date'
 import { getResourceTypeLabel } from '../../utils/resource'
 import { getTimeSlotLabel, isSameTimeSlot } from '../../utils/time-slot'
@@ -245,14 +246,41 @@ Page({
 
   /**
    * 提交预约。
-   * Phase 4 只交付按钮状态：未选时段时按钮禁用（此处再兜一次），选中后点击给出提示。
-   * Phase 6 会把这里换成 createBooking 调用与结果处理。
+   *
+   * Phase 4 只交付按钮状态；Phase 5 在真正的提交之前补上第一道门槛
+   * ——「用户已登录」（需求 §4.5 提交前检查第 1 项、技术设计 §11 预约规则第 1 条）。
+   * 真正的预约提交（参数与时间校验 + POST /api/bookings）属于 Phase 6。
+   *
+   * 为什么用 showModal 而不是直接把用户推去登录页：
+   * 用户可能只是误触；而且本页已经选好了日期与时段，直接跳走会让人以为选择丢了。
+   * 先问一句，确认后再去登录——登录页是 push 进来的，返回时本页实例与已选时段都还在。
    */
   onSubmit() {
     const slot = this.data.selectedSlot
     if (!slot) {
       return
     }
+
+    if (!isLoggedIn()) {
+      wx.showModal({
+        title: '需要登录',
+        content: '登录后才能预约场地，是否现在去登录？',
+        confirmText: '去登录',
+        success: (res) => {
+          if (!res.confirm) {
+            return
+          }
+          wx.navigateTo({
+            url: '/pages/login/login',
+            fail: () => {
+              wx.showToast({ title: '页面跳转失败', icon: 'none' })
+            },
+          })
+        },
+      })
+      return
+    }
+
     wx.showToast({ title: '预约提交功能即将开放', icon: 'none' })
   },
 
