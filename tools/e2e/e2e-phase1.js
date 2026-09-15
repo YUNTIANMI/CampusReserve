@@ -23,6 +23,8 @@ const wsEndpoint = process.argv[2] || 'ws://127.0.0.1:9420'
 
 /** 与小程序端 services/config.ts 的 MOCK_MODE_STORAGE_KEY 保持一致 */
 const MOCK_MODE_KEY = 'CR_MOCK_MODE'
+/** Phase 4 起详情页新增「可用时间段」数据源模式，同样需要固定，避免上一次测试的残留影响断言 */
+const MOCK_AVAIL_MODE_KEY = 'CR_MOCK_AVAIL_MODE'
 
 const results = []
 let failed = 0
@@ -38,6 +40,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 /** 清除开发期数据源模式，恢复为默认的 success，保证断言确定性 */
 async function clearMockMode(mp) {
   await mp.evaluate((key) => wx.removeStorageSync(key), MOCK_MODE_KEY)
+  await mp.evaluate((key) => wx.removeStorageSync(key), MOCK_AVAIL_MODE_KEY)
 }
 
 async function currentPath(mp) {

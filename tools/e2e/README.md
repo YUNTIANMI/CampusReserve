@@ -29,19 +29,34 @@ node ./start-automation.js
 node ./e2e-phase1.js ws://127.0.0.1:9420   # Phase 1：路由、页面参数、四态组件、页签
 node ./e2e-phase2.js ws://127.0.0.1:9420   # Phase 2：首页、分类入口、ResourceCard、下拉刷新
 node ./e2e-phase3.js ws://127.0.0.1:9420   # Phase 3：列表页、分类筛选、卡片列表、四态、下拉刷新
+node ./e2e-phase4.js ws://127.0.0.1:9420   # Phase 4：资源详情、日期条、时间段三态、选择与按钮状态
 ```
 
-也可以用 npm 脚本：`npm run auto` / `npm run phase1` / `npm run phase2` / `npm run phase3`。
+也可以用 npm 脚本：`npm run auto` / `npm run phase1` / `npm run phase2` / `npm run phase3` / `npm run phase4`。
 
 `start-automation.js` 会自动定位开发者工具 CLI（可用命令行参数或 `WX_DEVTOOLS_CLI` 环境变量覆盖），
 并把工程根指向 `../../CampusReserve`。
 
 退出码 `0` 表示全部通过，输出末行为 `E2E_TEST = PASS`。
-当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`，Phase 3 `65/65`。
+当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`，Phase 3 `65/65`，Phase 4 `81/81`。
 
 > Phase 1 的脚本自 Phase 3 起会先清除 `CR_MOCK_MODE`：`resource-list` 已接入真实数据源，
 > 不固定数据源模式就无法确定性断言。Phase 1 脚本对该页只覆盖「Phase 1 交付物」
 > （参数处理 + 三个状态组件的渲染与事件链路），筛选与列表渲染由 Phase 3 脚本覆盖。
+> 自 Phase 4 起脚本还会一并清除 `CR_MOCK_AVAIL_MODE`（详情页的可用时间段数据源模式）。
+
+## 开发期数据源开关
+
+小程序端 `services/config.ts` 的 `USE_MOCK_DATA` 为 `true` 时，页面数据来自本地数据源，
+测试通过两个存储键注入不同响应（缺省均为正常态，脚本结束时都会清掉）：
+
+| 存储键 | 作用对象 | 取值 |
+| --- | --- | --- |
+| `CR_MOCK_MODE` | 资源列表、资源详情 | `success`（缺省）/ `empty` / `error` |
+| `CR_MOCK_AVAIL_MODE` | 可用时间段 | `default`（缺省）/ `full` / `none` / `error` |
+
+两个键刻意分开：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
+一个键表达不了「详情正常但该日期时段为空」这种组合。
 
 ## 实测踩坑（改动测试脚本前务必先读）
 
@@ -110,3 +125,33 @@ node ./e2e-phase3.js ws://127.0.0.1:9420   # Phase 3：列表页、分类筛选�
     点击前页面本就处于 success，事件又要跨渲染层→AppService 传递，所以「等 success」会立刻命中
     点击前的旧值，于是读到上一步的数据（Phase 3 实测因此误报 4 项）。
     应按「**目标字段已变为期望值** 且 状态为期望值」轮询，见 `tapFilterAndWait()`。
+
+14. **`element.tap()` 只把事件派发给「你查到的那个节点」，不是按坐标点一下。**
+    对自定义组件而言，必须点**组件根节点**（即组件 WXML 的最外层节点，它才是挂 `bindtap` 的地方）。
+    点在页面自带的外层包裹节点（例如组件外面套的 `<view class="slots__item">`）上，
+    组件内部的事件处理器根本不会触发，症状是「点了没反应」，且不会报任何错
+    （Phase 4 实测因此连带误报 8 项：选中状态、按钮状态、摘要文案全挂）。
+
+15. **`text()` 不会穿透组件边界去聚合子内容。**
+    若某个页面节点内部放的是自定义组件，读这个页面节点的 `text()` 会得到空串——
+    内容在组件自己的节点树里。要读组件内的文案，必须查组件根节点或组件内部的节点。
+    （Phase 3 里 `resource-card` 能取到整条文案，是因为查的正是组件根节点。）
+    另外 `<text>` 节点在内容为空时 `size()` 会返回 `0x0`，`xpathEl()` 会判为「不存在」；
+    这也是个有用的信号：**尺寸为 0 往往意味着插值出来是空串**。
+
+16. **组件根节点的 `class` 带插值修饰符时，不要用 `@class` 精确匹配。**
+    例如 `class="time-slot {{selectable ? '' : 'time-slot--disabled'}}"` 渲染后是
+    `time-slot time-slot--disabled`（连续空格被规范化），精确匹配永远不中。
+    用 `contains(@class,"time-slot") and not(contains(@class,"time-slot__"))`：
+    `not(...)` 排除同前缀的子元素（`time-slot__label` / `time-slot__status`）。
+
+17. **绝对不要用 `slot` 作为自定义组件的属性名。**
+    `slot` 是小程序的保留属性（用于具名插槽），`<my-comp slot="{{item}}">` 会被框架当成插槽声明
+    吃掉，`properties` 永远收不到值。**不报错、不告警**，症状是「组件渲染出来了、根节点 class
+    也正确，但内部文案全是空串」——因为 data 还停在初始值。Phase 4 实测踩到，
+    排查花了两个来回。属性名改为 `slotData`（标签上写 `slot-data`）后正常。
+
+18. **改动小程序源码后要留出编译时间再跑测试。**
+    开发者工具是文件监听 + 增量编译，连续快速改动时，紧接着启动的自动化会话可能仍读到
+    旧编译产物，表现为「代码改了但行为没变」，极易误判为修复无效。
+    排查这类问题时可临时在 WXML 里插一个 `PROBE[...]` 之类的标记，确认当前跑的是新包。
