@@ -1,0 +1,14 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: campusreserve-backend
+
+# 数据源（MySQL）在 Phase 10「后端与数据层整理」中启用，
+# 届时在此追加 spring.datasource.* 配置，并补充 mysql-connector-j 依赖。
+
+logging:
+  level:
+    root: info
+    com.campusreserve: debug
