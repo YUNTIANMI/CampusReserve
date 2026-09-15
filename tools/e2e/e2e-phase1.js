@@ -78,33 +78,6 @@ async function bottomRoute(mp) {
   return info.routes[0]
 }
 
-/** 在首页点击指定文案的入口，轮询确认跳转；失败自动重试一次 */
-async function tapEntry(mp, label, expectPath) {
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    if ((await currentPath(mp)) !== 'pages/index/index') {
-      await goBackTo(mp, 'pages/index/index')
-      await sleep(700)
-    }
-    const page = await mp.currentPage()
-    const list = await page.$$('.cr-list__item')
-    let el = null
-    for (const it of list) {
-      const t = await it.text()
-      if (t && t.indexOf(label) >= 0) {
-        el = it
-        break
-      }
-    }
-    if (!el) return { ok: false, detail: '未找到入口元素' }
-    await el.tap()
-    const got = await waitForPath(mp, expectPath, 4000)
-    if (got === expectPath) {
-      return { ok: true, detail: attempt > 1 ? `第 ${attempt} 次点击成功` : undefined }
-    }
-  }
-  return { ok: false, detail: '两次点击均未跳转' }
-}
-
 /**
  * 查询自定义组件内部节点。
  * automator 的 page.xpath() 未命中时返回占位对象，因此这里以 tagName + 尺寸双重判定。
@@ -151,10 +124,13 @@ async function xpathText(page, xpath) {
     await sleep(600)
 
     let page = await mp.currentPage()
-    const entries = await page.$$('.cr-list__item')
-    check('首页渲染 4 个页面入口', entries.length === 4, `实际 ${entries.length}`)
+    // Phase 2 起首页已是真实页面，Phase 1 的临时「页面入口」调试列表随之移除，
+    // 这里改为校验首页已渲染真实的分类入口；首页真实入口的跳转由 e2e-phase2.js 覆盖。
+    const entries = await page.$$('.category-item')
+    check('首页渲染 4 个分类入口', entries.length === 4, `实际 ${entries.length}`)
 
-    // ---------- 2. 四条路由：点击首页入口逐个验证 ----------
+    // ---------- 2. 四条核心路由可达性 ----------
+    // 首页不再提供调试用入口列表，改为直接导航验证路由本身可用。
     const routes = [
       { label: '资源列表', path: 'pages/resource-list/resource-list' },
       { label: '资源详情', path: 'pages/resource-detail/resource-detail' },
@@ -162,8 +138,9 @@ async function xpathText(page, xpath) {
       { label: '预约详情', path: 'pages/booking-detail/booking-detail' },
     ]
     for (const r of routes) {
-      const res = await tapEntry(mp, r.label, r.path)
-      check(`点击「${r.label}」入口并跳转`, res.ok, res.detail)
+      await mp.navigateTo(`/${r.path}`)
+      const got = await waitForPath(mp, r.path, 6000)
+      check(`路由「${r.label}」可正常打开`, got === r.path, `实际 ${got}`)
       const back = await goBackTo(mp, 'pages/index/index')
       check(`从「${r.label}」返回首页`, back === 'pages/index/index', `实际 ${back}`)
     }
