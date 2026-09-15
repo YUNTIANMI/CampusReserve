@@ -21,11 +21,11 @@
 
 ## 2. Current Phase
 
-当前阶段：Phase 4 - 资源详情与时间选择（已完成，E2E 实测 81/81 通过）
+当前阶段：Phase 5 - 用户登录（已完成，E2E 实测 63/63 通过）
 
 当前任务：无
 
-下一阶段：Phase 5 - 用户登录
+下一阶段：Phase 6 - 创建预约
 
 ## 3. Completed
 
@@ -94,15 +94,28 @@ Phase 4（资源详情与时间选择）：
 - [x] 端到端测试：真实开发者工具中 81/81 通过（`tools/e2e/e2e-phase4.js`）
 - [x] 回归测试：Phase 1 36/36、Phase 2 47/47、Phase 3 65/65 通过
 
+Phase 5（用户登录）：
+- [x] 登录入口：首页顶部用户区（点击进登录页）+ 我的预约页未登录引导的「去登录」按钮
+- [x] 微信登录流程：`wx.login()` 取 code → 换登录态 → 成功后自动返回来源页，按钮有「登录中…」态
+- [x] 登录状态保存：`store/auth.ts` 内存态为真源，写本地缓存并镜像到 `app.globalData`
+- [x] 用户信息展示：登录页展示昵称与用户 ID，头像用昵称首字占位
+- [x] 登录失败处理：停在登录页 + 错误提示，按钮可重试
+- [x] 未登录状态处理：我的预约页登录引导、详情页点预约先弹「需要登录」再进登录页
+- [x] 退出登录：二次确认后清空内存态与缓存，各页面 `onShow` 回到未登录展示
+- [x] 冷启动恢复登录态；凭证与用户信息不同时有效时回到未登录并清残留
+- [x] 静态检查：`tsc --noEmit` 0 错误
+- [x] 端到端测试：真实开发者工具中 63/63 通过（`tools/e2e/e2e-phase5.js`）
+- [x] 回归测试：Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、Phase 4 81/81 通过
+
 ## 4. In Progress
 
 暂无。
 
 ## 5. Next Tasks
 
-1. Phase 5：登录入口
-2. Phase 5：微信登录流程（`wx.login` → 后端换取登录态）
-3. Phase 5：登录状态保存（本地缓存 `userInfo` / `loginState`，技术设计 §9）
+1. Phase 6：Booking 数据模型与 `POST /api/bookings`
+2. Phase 6：前端预约提交（替换详情页现在的「即将开放」占位提示）
+3. Phase 6：参数校验、时间合法性校验、冲突检查、成功 / 失败提示
 
 ## 6. Current Frontend State
 
@@ -111,21 +124,26 @@ AppID：`wxb97024eb0305368d`
 
 已就绪：
 - `app.ts` / `app.json` / `app.wxss` / `sitemap.json` / `tsconfig.json`
+- `app.ts`（Phase 5）：`onLaunch` 调 `store/auth` 的 `restoreSession()`，并把结果镜像进
+  `globalData.loginState` / `userInfo`（冷启动恢复入口）
+- `app.json`（Phase 5）：`pages` 首部加入 `pages/login/login`（登录页是功能入口，非 TabBar 页）
 - `project.config.json`（已启用 `useCompilerPlugins: ["typescript"]`）
 - `typings/`（微信小程序 API 类型定义，来自 `miniprogram-api-typings@5.2.3`）
-- 目录骨架：`pages/` `components/` `services/` `utils/` `types/` `store/`
+- 目录骨架：`pages/` `components/` `services/` `utils/` `types/` `store/`（`store/` 自 Phase 5 起实际使用）
 
 类型（`types/`）：
 - `api.ts`：统一响应体 `ApiResponse<T>`、`ApiError`
 - `page.ts`：页面四态 `PageState`（loading / success / empty / error）
 - `user.ts` / `resource.ts` / `booking.ts`：用户、资源、预约领域类型
-  （`resource.ts` 另含 Phase 2 新增的查询参数 `ResourceQuery`）
+  （`resource.ts` 另含 Phase 2 新增的查询参数 `ResourceQuery`；
+  `user.ts` 另含 Phase 5 新增的 `AuthSession`：`{ token, userInfo }`，即一次登录的完整结果）
 - `global.d.ts`：仅保留 `IAppOption`（全局 ambient 类型已迁至 `types/` 内具名模块）
 - `index.ts`：统一出口
 
 服务（`services/`）：
 - `config.ts`：API 根地址、超时常量，以及开发期数据源开关 `USE_MOCK_DATA` 与模式存储键
-  （Phase 4 追加 `MOCK_AVAIL_MODE_STORAGE_KEY`，与列表/详情的模式键分开，理由见 §11）
+  （Phase 4 追加 `MOCK_AVAIL_MODE_STORAGE_KEY`、Phase 5 追加 `MOCK_AUTH_MODE_STORAGE_KEY`，
+  三个键刻意分开，理由见 §11）
 - `request.ts`：封装 `wx.request`，统一归一化为 `ApiError`（区分网络失败 / 超时 / HTTP 非 2xx / 业务 code ≠ 0）
 - `resource.ts`（Phase 2 / Phase 4）：资源业务接口
   - `getResources(query)`（Phase 2）
@@ -136,6 +154,24 @@ AppID：`wxb97024eb0305368d`
   - `mockGetResources` / `mockGetResourceDetail` / `mockGetAvailability`
   - `MOCK_SLOT_TEMPLATE`：6 个时段（取自需求 §4.4），`default` 模式下按确定性规则分布
     `BOOKED` / `DISABLED` / `AVAILABLE`，保证任意资源任意日期都能同时看到三种状态
+  - **当天已过时的时段按技术设计 §11 标为 `DISABLED`**（不是缺陷；写测试时要注意，见 §11）
+- `auth.ts`（Phase 5）：登录业务接口
+  - `login()`：`wx.login()` 取一次性 code → 换登录态 → 写 `store/auth` → 返回 `UserInfo`
+  - `logout()`：清本地登录态（通知服务端失效属于 Phase 10）
+- `mock-auth.ts`（Phase 5）：开发期登录数据源
+  - `mockLogin(code)`：模拟 `POST /api/auth/login`，固定用户 `MOCK_USER_ID=1001` / `MOCK_NICKNAME='校园用户'`，
+    延迟 `MOCK_LOGIN_DELAY=400ms`（用于观察「登录中…」态）；`CR_MOCK_AUTH_MODE=error` 时
+    抛出 `ApiError(401001)` 模拟登录失败
+  - **刻意不返回 `avatarUrl`**：与「开发期不提供 `imageUrl`」同一决策（测试不依赖网络图片），
+    登录页头像用昵称首字占位
+
+登录态（`store/auth.ts`，Phase 5 新增）：
+- 模块级内存态 `currentLoginState` / `currentUserInfo` / `currentToken` 是**登录态的真源**
+- `restoreSession()`（`app.onLaunch` 调用，冷启动恢复）、`saveSession()`、`clearSession()`；
+  读取接口 `getLoginState()` / `isLoggedIn()` / `getUserInfo()` / `getToken()`
+- 缓存键 `CR_AUTH_TOKEN` / `CR_USER_INFO`；同时镜像到 `app.globalData.loginState` / `userInfo`
+- **恢复策略**：凭证与用户信息**同时有效**才算已登录，否则回到未登录并清掉残留
+  （避免「有 token 没用户信息」这种半残状态流到页面）
 
 工具（`utils/`）：
 - `resource.ts`（Phase 2）：资源分类常量 `RESOURCE_TYPE_OPTIONS` 与 `getResourceTypeLabel()`
@@ -148,8 +184,11 @@ AppID：`wxb97024eb0305368d`
   同一时段判定 `isSameTimeSlot()`
 
 页面：
-- `pages/index`（Phase 2 完成）：真实首页，含顶部区域、4 个分类入口、热门 / 推荐资源、
-  四态与下拉刷新；点击资源卡进入详情，点击分类进入列表并带 `category` 参数
+- `pages/index`（Phase 2 完成，Phase 5 追加用户区）：真实首页，含顶部区域、4 个分类入口、
+  热门 / 推荐资源、四态与下拉刷新；点击资源卡进入详情，点击分类进入列表并带 `category` 参数。
+  Phase 5 在顶部加**用户区**（昵称 / 「未登录」+ 头像首字占位），点击进入登录页；
+  用户区文案由 `onShow` 里的 `refreshUserBar()` 同步登录态，**既有的 `.hero__*` 结构未改动**
+  （Phase 1 / Phase 2 的测试依赖它）
 - `pages/resource-list`（Phase 3 完成）：真实列表页，含分类筛选栏、`ResourceCard` 列表、
   四态与下拉刷新。两个关键设计：
   1. **筛选栏是静态内容，不随四态变化**（与首页一致）——接口失败或结果为空时仍能切换分类，
@@ -167,7 +206,16 @@ AppID：`wxb97024eb0305368d`
   4. **切换日期清空已选时段**——时段属于某一天，跨日期沿用会提交出用户并未选择的组合。
   另：切换日期时比对请求发出时的日期，条件已变则丢弃该次过期响应；
   「有时段但全部不可预约」仍是 success（时段确实存在且要展示），只额外给一句提示。
-- `pages/my-bookings`：待使用 / 已完成 / 已取消三个状态页签
+  Phase 5 起 `onSubmit` 增加**未登录分支**：未登录先 `wx.showModal`（「需要登录」/确认文案「去登录」）
+  引导，确认后跳登录页；已登录才给「预约提交功能即将开放」提示（真正提交属 Phase 6）。
+  登录返回后**已选时段仍在**，因为 `navigateBack` 复用原页面实例
+- `pages/login`（Phase 5 新增）：登录页，未登录时展示登录说明 + 错误区 +「微信一键登录」
+  （加载中为「登录中…」）；已登录时展示用户信息（昵称、用户 ID、头像首字占位）+「退出登录」
+  （二次确认）。`onShow` 调 `refresh()` 同步登录态；登录成功后 `wx.showToast` 再延迟约 600ms
+  `navigateBack` 返回来源页
+- `pages/my-bookings`（Phase 1 完成，Phase 5 追加未登录引导）：待使用 / 已完成 / 已取消三个状态页签；
+  **未登录时展示 `empty-state` 登录引导**（「登录后查看我的预约」+「去登录」）而不是空列表，
+  已登录才展示原有骨架。三个 `.tabs__item` 与默认 `emptyText` 保持不变（Phase 1 测试依赖）
 - `pages/booking-detail`：接收 `id` 参数，参数缺失时展示错误态
 
 组件：
@@ -232,7 +280,8 @@ cd backend
 
 仅有一个非业务的健康检查接口：`GET /api/health`。
 
-业务 API 尚未实现；文档中规划的 `GET /api/resources` 等接口属于 Phase 3 / Phase 6 / Phase 7 / Phase 8。
+业务 API 尚未实现；文档中规划的 `GET /api/resources` 等接口属于 Phase 3 / Phase 6 / Phase 7 / Phase 8，
+`POST /api/auth/login` 属于 Phase 10（Phase 5 已在前端按契约调用，当前由开发期数据源顶替）。
 
 API 设计以：
 `docs/05_api_contract.md`
@@ -288,7 +337,8 @@ API 设计以：
      再 `cli.bat auto --project <小程序目录>` 即可恢复。
    - 解析 `page.callMethod()` 调用 async 方法时，其返回的 Promise 无法被序列化；
      需要「触发页面方法并读状态」时，在同一次 `evaluate` 内先调用再读，可稳定捕获瞬时状态。
-   - 现成可用的端到端脚本与说明见 `tools/e2e/`（Phase 1 36/36、Phase 2 47/47、Phase 3 65/65 通过）。
+   - 现成可用的端到端脚本与说明见 `tools/e2e/`（Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、
+     Phase 4 81/81、Phase 5 63/63 通过）。
 
 6. **模拟器的路由过渡必须先收尾再发下一次导航（Phase 3 实测，极易误判为产品缺陷）**：
    - `wx.navigateTo` / `wx.navigateBack` 的**栈顶路由更新很快，但整段过渡动画约 1.2 秒才
@@ -328,6 +378,18 @@ API 设计以：
    - **改动源码后要留出编译时间再跑测试。** 开发者工具是文件监听 + 增量编译，连续快速改动时，
      紧接着启动的自动化会话可能仍读到旧编译产物，表现为「代码改了但行为没变」，极易误判为修复无效
      （Phase 4 实测因此多花了一个来回）。
+
+8. **登录态是 `store/auth.ts` 的模块级内存态，从外部直接写缓存不会生效（Phase 5 实测）**：
+   - `wx.setStorageSync('CR_AUTH_TOKEN', ...)` 只写缓存、不影响内存态，而页面读的是内存态，
+     因此「塞一份 token 再断言已登录」必然失败。要建立登录态必须走真实登录流程
+     （`services/auth.ts` 的 `login()`，Phase 5 E2E 里的 `loginViaPage()`）。
+   - 反过来，验证「冷启动恢复」时才先写缓存、再触发一次 `app.onLaunch()`：automator 没有 restart API，
+     本项目也约定不使用 `mp.reLaunch`；`onLaunch` 与真实冷启动执行的是同一段代码，是本机条件下最贴近的验证。
+   - 页面 `data.loginState` 只是 `onShow` 同步过来的副本，刚跳转完可能还没刷新；
+     判断全局状态请读 `app.globalData.loginState`。
+   - 同一批 E2E 结论还有两条（**不要在已处于登录页时再次 `navigateTo` 登录页**，否则页面栈出现
+     两个登录页、`navigateBack` 到不了来源页；**mock 会把当天已过时时段标 `DISABLED`**，
+     傍晚跑测试时当天可预约时段为 0，断言前须先切到明天），见 `tools/e2e/README.md` 第 19–24 条。
 
 ## 11. Important Decisions
 
@@ -369,21 +431,28 @@ CampusReserve/          # 仓库根
 Git 提交规范：中文 Conventional Commits，`<type>(<scope>): <中文简述>`。
 Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 
-开发期数据源（Phase 2 引入，Phase 4 扩展，临时机制）：
+开发期数据源（Phase 2 引入，Phase 4 / Phase 5 扩展，临时机制）：
 - 前端页面先于后端实现，`services/config.ts` 的 `USE_MOCK_DATA` 为 `true` 时，
-  由 `services/mock-resource.ts` 提供与 `Resource` / `Availability` 类型一致的本地数据，
-  使页面在后端 API（Phase 10）落地前即可验证 success / empty / error 三种展示。
+  由 `services/mock-resource.ts` 与 `services/mock-auth.ts` 提供与 `Resource` / `Availability` /
+  `AuthSession` 类型一致的本地数据，使页面在后端 API（Phase 10）落地前即可验证
+  success / empty / error 三种展示与登录 / 登录失败两条路径。
 - 该开关只决定数据来源，页面与组件代码不感知；后端联调时改为 `false` 即切到真实接口。
-- 两个模式存储键供调试与端到端测试注入，属开发期机制，联调前应连同开关一并移除：
+- 三个模式存储键供调试与端到端测试注入，属开发期机制，联调前应连同开关一并移除：
   - `CR_MOCK_MODE`（`success` | `empty` | `error`）：作用于资源列表与资源详情，
     `empty` 在详情页的含义是「该资源不存在」
   - `CR_MOCK_AVAIL_MODE`（`default` | `full` | `none` | `error`，Phase 4 追加）：作用于可用时间段，
     `full` 用于验证「全部约满时按钮保持禁用」，`none` 用于验证时间段空态
-- **两个键刻意分开**：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
-  一个键表达不了「详情正常但该日期时段为空」这种组合。
-- 已定决策：**开发期数据源不提供 `imageUrl`**，因此详情页与资源卡片始终展示类型占位块。
+  - `CR_MOCK_AUTH_MODE`（`success`(缺省) | `error`，Phase 5 追加）：作用于登录，
+    `error` 用于验证「登录失败提示 + 可重试」
+- **三个键刻意分开**：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
+  登录的 `error` 指「登录接口失败」——一个键表达不了这些组合
+  （例如「详情正常但该日期时段为空」「资源列表正常但登录失败」）。
+- 已定决策：**开发期数据源不提供 `imageUrl`、也不提供 `avatarUrl`**，因此详情页与资源卡片始终展示
+  类型占位块、登录页头像用昵称首字占位。
   这是为了让端到端测试不依赖网络图片。真实图片资源待 Phase 9（体验优化）/ Phase 12（作品集整理）
-  统一补齐，届时只需给 mock 数据或后端数据补 `imageUrl`，页面代码无需改动。
+  统一补齐，届时只需给 mock 数据或后端数据补 `imageUrl` / `avatarUrl`，页面代码无需改动。
+- 已定决策（Phase 5）：**登录态的真源是 `store/auth.ts` 的模块级内存态**，本地缓存只作冷启动恢复用；
+  不引入全局状态库（项目不使用 Redux / MobX 一类方案），页面在 `onShow` 从 `store` 取副本即可。
 
 当前不使用：
 - Redis
@@ -418,8 +487,10 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 ## 14. Last Updated
 
 更新时间：2026-09-15  
-最后完成任务：Phase 4 资源详情与时间选择完成并通过端到端测试（真实开发者工具中 81/81 通过，
-Phase 1 / Phase 2 / Phase 3 回归 36/36、47/47、65/65）；实现图片与类型占位、资源信息、7 天日期条、
-`TimeSlot` 组件与三态、选择 / 取消选择时间、预约按钮状态，资源信息区与时间段区各自独立四态；
-并摸清自定义组件的四条硬约束（新增已知问题 7）  
+最后完成任务：Phase 5 用户登录完成并通过端到端测试（真实开发者工具中 63/63 通过，
+Phase 1 / Phase 2 / Phase 3 / Phase 4 回归 36/36、47/47、65/65、81/81）；实现登录入口、微信一键登录流程、
+登录态保存（内存态真源 + 本地缓存 + `globalData` 镜像）、用户信息展示、登录失败与重试、未登录引导
+（我的预约页引导 + 详情页点预约先弹登录引导）、退出登录与冷启动恢复；
+新增 `store/auth.ts`、`services/auth.ts`、`services/mock-auth.ts`、`pages/login`，
+并摸清登录态读取点与登录页导航的两条硬约束（新增已知问题 8）  
 更新者：Developer（AI 协同）

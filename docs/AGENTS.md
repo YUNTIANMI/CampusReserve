@@ -262,6 +262,7 @@ node ./e2e-phase1.js                # Phase 1：路由、页面参数、四态�
 node ./e2e-phase2.js                # Phase 2：首页、分类入口、ResourceCard、下拉刷新
 node ./e2e-phase3.js                # Phase 3：列表页、分类筛选、卡片列表、四态、下拉刷新
 node ./e2e-phase4.js                # Phase 4：资源详情、日期条、时间段三态、选择与按钮状态
+node ./e2e-phase5.js                # Phase 5：登录入口、一键登录流程、登录态保存、未登录引导
 ```
 
 测试脚本编写的硬约束（选择器无法穿透自定义组件、`page.xpath()` 的占位返回与谓词能力、
