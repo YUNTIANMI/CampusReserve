@@ -1,0 +1,50 @@
+# ===== Java / Maven =====
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+*.ear
+hs_err_pid*
+replay_pid*
+
+# ===== Node =====
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== 微信开发者工具 =====
+# 个人本地设置，由工具自动生成，不应提交
+project.private.config.json
+miniprogram_npm/
+# 开发者工具本地缓存
+.wxcloud/
+
+# ===== IDE =====
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+.springBeans
+.sts4-cache
+nbproject/private/
+
+# ===== 日志与临时文件 =====
+*.log
+logs/
+*.tmp
+.tmp-*/
+
+# ===== AI 协同开发的工作区状态（仅本机，不随仓库分发）=====
+.workbuddy/
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+desktop.ini
