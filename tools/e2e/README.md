@@ -28,15 +28,20 @@ node ./start-automation.js
 # 2) 执行测试
 node ./e2e-phase1.js ws://127.0.0.1:9420   # Phase 1：路由、页面参数、四态组件、页签
 node ./e2e-phase2.js ws://127.0.0.1:9420   # Phase 2：首页、分类入口、ResourceCard、下拉刷新
+node ./e2e-phase3.js ws://127.0.0.1:9420   # Phase 3：列表页、分类筛选、卡片列表、四态、下拉刷新
 ```
 
-也可以用 npm 脚本：`npm run auto` / `npm run phase1` / `npm run phase2`。
+也可以用 npm 脚本：`npm run auto` / `npm run phase1` / `npm run phase2` / `npm run phase3`。
 
 `start-automation.js` 会自动定位开发者工具 CLI（可用命令行参数或 `WX_DEVTOOLS_CLI` 环境变量覆盖），
 并把工程根指向 `../../CampusReserve`。
 
 退出码 `0` 表示全部通过，输出末行为 `E2E_TEST = PASS`。
-当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`。
+当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`，Phase 3 `65/65`。
+
+> Phase 1 的脚本自 Phase 3 起会先清除 `CR_MOCK_MODE`：`resource-list` 已接入真实数据源，
+> 不固定数据源模式就无法确定性断言。Phase 1 脚本对该页只覆盖「Phase 1 交付物」
+> （参数处理 + 三个状态组件的渲染与事件链路），筛选与列表渲染由 Phase 3 脚本覆盖。
 
 ## 实测踩坑（改动测试脚本前务必先读）
 
@@ -84,3 +89,24 @@ node ./e2e-phase2.js ws://127.0.0.1:9420   # Phase 2：首页、分类入口、R
 
 10. **刚执行 `cli auto` 时窗口可能仍在编译。** 连接需要重试，连接后首次断言前留一段等待，
     否则会读到空页面栈。
+
+11. **导航之间必须等过渡收尾，否则模拟器会把路由过渡卡死约 10 秒。**（Phase 3 实测，最容易误判）
+    `wx.navigateTo` / `wx.navigateBack` 的**栈顶路由更新很快，但整段过渡动画约 1.2 秒才 `onRouteDone`**。
+    在过渡未结束时再发导航，会把过渡卡死到约 10 秒超时——日志证据：点卡片后 0.5 秒就发返回，
+    结果详情页的 `onRouteDone` 迟了 10 秒，期间 `wx.navigateTo` 报 `fail timeout` 并触发页面的失败提示，
+    而 `wx.navigateBack` 自身却立即回报 success。
+    对照实验：用 appservice 直接驱动导航时，首页↔列表↔详情各段过渡均为 **3~5ms**，
+    即**卡顿由测试节奏造成，不是产品缺陷**。
+    正确写法：每次导航后等路由落到目标页并静默约 1.4 秒再继续，见 `waitForRouteSettled()`。
+
+12. **多级返回不要用 `mp.navigateBack()`。**
+    它是 `changeRoute('navigateBack')`，**不接受 `delta`**，且会在页面销毁瞬间抛
+    `Uncaught [object Object]`（抛错时导航其实已经生效，属工具层问题）。
+    应改为 `mp.evaluate(() => wx.navigateBack({ delta }))`，按真实页面栈一次返回到位。
+    另外**不要「读栈 → 判断 → 再退」循环**：过渡窗口里读到的是旧栈，会连发多次返回冲过目标页
+    （Phase 3 实测把「回列表」冲成了「回首页」）。见 `goBackTo()`。
+
+13. **点击交互后不能只等状态字段变回原值再断言。**
+    点击前页面本就处于 success，事件又要跨渲染层→AppService 传递，所以「等 success」会立刻命中
+    点击前的旧值，于是读到上一步的数据（Phase 3 实测因此误报 4 项）。
+    应按「**目标字段已变为期望值** 且 状态为期望值」轮询，见 `tapFilterAndWait()`。

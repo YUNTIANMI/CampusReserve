@@ -12,10 +12,17 @@
  *      连 <empty-state> 组件标签本身都查不到；组件内部断言必须走 page.xpath()。
  *   2. page.xpath() 未命中时「不返回 null」，而是返回 tagName 为 undefined、
  *      尺寸 0x0 的占位对象。判定存在必须同时检查 tagName 与尺寸，见 xpathEl()。
+ *
+ * 注意：Phase 3 起 resource-list 已接入真实数据源，本文件对该页的断言只覆盖
+ * 「Phase 1 交付物」（参数处理 + 三个状态组件的渲染与事件链路），
+ * 且需固定数据源模式才能确定性通过；筛选与列表渲染等由 e2e-phase3.js 覆盖。
  */
 const automator = require('miniprogram-automator')
 
 const wsEndpoint = process.argv[2] || 'ws://127.0.0.1:9420'
+
+/** 与小程序端 services/config.ts 的 MOCK_MODE_STORAGE_KEY 保持一致 */
+const MOCK_MODE_KEY = 'CR_MOCK_MODE'
 
 const results = []
 let failed = 0
@@ -27,6 +34,11 @@ function check(name, ok, detail) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/** 清除开发期数据源模式，恢复为默认的 success，保证断言确定性 */
+async function clearMockMode(mp) {
+  await mp.evaluate((key) => wx.removeStorageSync(key), MOCK_MODE_KEY)
+}
 
 async function currentPath(mp) {
   const page = await mp.currentPage()
@@ -116,6 +128,9 @@ async function xpathText(page, xpath) {
 
   try {
     await sleep(1500)
+    // 固定数据源模式，避免上一次测试残留的 empty / error 模式影响断言
+    await clearMockMode(mp)
+    await sleep(300)
 
     // ---------- 1. 启动页与首页内容 ----------
     const bottom = await bottomRoute(mp)
@@ -192,19 +207,41 @@ async function xpathText(page, xpath) {
     )
     await goBackTo(mp, 'pages/index/index')
 
-    // ---------- 5. resource-list：参数、四态与三个状态组件 ----------
+    // ---------- 5. resource-list：参数处理与三个状态组件 ----------
+    // Phase 3 起该页已接入真实数据源，这里只回归 Phase 1 的交付物：
+    // 参数处理 + loading / empty / error 三个状态组件的真实渲染与事件链路。
+    // 筛选、卡片列表、下拉刷新等 Phase 3 行为由 e2e-phase3.js 覆盖。
     await mp.navigateTo('/pages/resource-list/resource-list?category=STUDY_ROOM')
-    await sleep(1500)
+    await sleep(1800)
     page = await mp.currentPage()
     data = await page.data()
     check('resource-list 接收 category 参数', data.category === 'STUDY_ROOM', String(data.category))
-    check('默认落到 empty 状态（无无限 loading）', data.pageState === 'empty', String(data.pageState))
+    check('列表加载完成，无无限 loading', data.pageState === 'success', String(data.pageState))
 
-    // empty 态组件
-    let text = await xpathText(page, '//view[@class="empty-state"]')
+    // loading 态组件
+    await page.setData({ pageState: 'loading' })
+    await sleep(800)
+    let text = await xpathText(page, '//view[@class="loading-state"]')
+    check(
+      'loading-state 组件真实渲染且文案正确',
+      text !== null && text.indexOf('正在加载资源') >= 0,
+      JSON.stringify(text),
+    )
+    check('loading 态下不再渲染 empty-state', (await xpathEl(page, '//view[@class="empty-state"]')) === null)
+    check('loading 态下不再渲染 error-state', (await xpathEl(page, '//view[@class="error-state"]')) === null)
+
+    // empty 态组件；空态文案现由页面按筛选条件计算，这里注入「全部」时的文案
+    await page.setData({
+      pageState: 'empty',
+      emptyText: '暂无资源',
+      emptyDescription: '暂时没有可预约的资源，可以稍后重试',
+      emptyActionText: '重新加载',
+    })
+    await sleep(800)
+    text = await xpathText(page, '//view[@class="empty-state"]')
     check(
       'empty-state 组件真实渲染且文案正确',
-      text !== null && text.indexOf('暂无资源数据') >= 0 && text.indexOf('返回上一页') >= 0,
+      text !== null && text.indexOf('暂无资源') >= 0 && text.indexOf('重新加载') >= 0,
       JSON.stringify(text),
     )
     const emptyBtn = await xpathEl(page, '//view[@class="empty-state__action"]')
@@ -215,18 +252,6 @@ async function xpathText(page, xpath) {
       btnSize !== null && parseFloat(String(btnSize.width)) > 0 && parseFloat(String(btnSize.height)) > 0,
       JSON.stringify(btnSize),
     )
-
-    // loading 态组件
-    await page.setData({ pageState: 'loading' })
-    await sleep(800)
-    text = await xpathText(page, '//view[@class="loading-state"]')
-    check(
-      'loading-state 组件真实渲染且文案正确',
-      text !== null && text.indexOf('正在加载资源') >= 0,
-      JSON.stringify(text),
-    )
-    check('loading 态下不再渲染 empty-state', (await xpathEl(page, '//view[@class="empty-state"]')) === null)
-    check('loading 态下不再渲染 error-state', (await xpathEl(page, '//view[@class="error-state"]')) === null)
 
     // error 态组件 + retry 事件链路
     await page.setData({ pageState: 'error', errorMessage: '网络连接失败，请检查网络后重试' })
@@ -245,26 +270,30 @@ async function xpathText(page, xpath) {
     check('error-state 渲染重试按钮', retryBtn !== null)
     if (retryBtn) {
       await retryBtn.tap()
-      await sleep(1500)
+      await sleep(2000)
       page = await mp.currentPage()
       data = await page.data()
       check(
-        '点击重试触发 retry 事件并重新加载（回到 empty）',
-        data.pageState === 'empty',
+        '点击重试触发 retry 事件并重新加载（落到 success）',
+        data.pageState === 'success',
         `pageState=${data.pageState}`,
       )
     }
 
-    // empty 态操作按钮 → 事件链路 → 返回上一页
-    const backBtn = await xpathEl(page, '//view[@class="empty-state__action"]')
-    check('empty-state 操作按钮可点击', backBtn !== null)
-    if (backBtn) {
-      await backBtn.tap()
-      const after = await waitForPath(mp, 'pages/index/index', 5000)
+    // empty 态操作按钮 → action 事件链路 → 触发重新加载
+    await page.setData({ pageState: 'empty', emptyText: '暂无资源', emptyActionText: '重新加载' })
+    await sleep(600)
+    const emptyActionBtn = await xpathEl(page, '//view[@class="empty-state__action"]')
+    check('empty-state 操作按钮可点击', emptyActionBtn !== null)
+    if (emptyActionBtn) {
+      await emptyActionBtn.tap()
+      await sleep(2000)
+      page = await mp.currentPage()
+      data = await page.data()
       check(
-        '点击 empty-state 操作按钮触发 action 事件并返回上一页',
-        after === 'pages/index/index',
-        `实际 ${after}`,
+        '点击 empty-state 操作按钮触发 action 事件并重新加载',
+        data.pageState === 'success',
+        `pageState=${data.pageState}`,
       )
     }
 
