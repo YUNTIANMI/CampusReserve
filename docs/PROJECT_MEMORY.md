@@ -21,11 +21,11 @@
 
 ## 2. Current Phase
 
-当前阶段：Phase 5 - 用户登录（已完成，E2E 实测 63/63 通过）
+当前阶段：Phase 6 - 创建预约（已完成，E2E 实测 61/61 通过）
 
 当前任务：无
 
-下一阶段：Phase 6 - 创建预约
+下一阶段：Phase 7 - 我的预约
 
 ## 3. Completed
 
@@ -104,8 +104,22 @@ Phase 5（用户登录）：
 - [x] 退出登录：二次确认后清空内存态与缓存，各页面 `onShow` 回到未登录展示
 - [x] 冷启动恢复登录态；凭证与用户信息不同时有效时回到未登录并清残留
 - [x] 静态检查：`tsc --noEmit` 0 错误
-- [x] 端到端测试：真实开发者工具中 63/63 通过（`tools/e2e/e2e-phase5.js`）
+- [x] 端到端测试：真实开发者工具中 64/64 通过（`tools/e2e/e2e-phase5.js`）
 - [x] 回归测试：Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、Phase 4 81/81 通过
+
+Phase 6（创建预约）：
+- [x] Booking 数据模型：沿用 `types/booking.ts` 的 `Booking` 与 `CreateBookingPayload`
+- [x] `POST /api/bookings`：`services/booking.ts` 的 `createBooking()`（Phase 10 接真实后端）
+- [x] 前端预约提交：详情页 `onSubmit` 真实提交，按钮「提交中…」态、成功跳转、失败按错误码分流
+- [x] 参数校验：`utils/booking.ts` 的 `validateBookingPayload()`（资源 ID / 日期 / 时间格式与先后）
+- [x] 时间合法性校验：含技术设计 §11 第 4 条「不得早于当前时间」，在提交那一刻重新判定
+- [x] 冲突检查：时段是否在开放范围、是否仍 `AVAILABLE`、是否已被重复预约
+- [x] 成功提示：toast「预约成功」+ 800ms 后跳转我的预约，并在返回时重取时段
+- [x] 失败提示：页面内提示条 + toast，按错误码给出「换个时段」或「稍后重试」的明确指引
+- [x] 异常处理全覆盖：未登录、时间冲突、资源不存在、参数错误、非法时间（另含网络异常与登录态失效）
+- [x] 静态检查：`tsc --noEmit` 0 错误
+- [x] 端到端测试：真实开发者工具中 61/61 通过（`tools/e2e/e2e-phase6.js`）
+- [x] 回归测试：Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、Phase 4 81/81、Phase 5 64/64 通过
 
 ## 4. In Progress
 
@@ -113,9 +127,9 @@ Phase 5（用户登录）：
 
 ## 5. Next Tasks
 
-1. Phase 6：Booking 数据模型与 `POST /api/bookings`
-2. Phase 6：前端预约提交（替换详情页现在的「即将开放」占位提示）
-3. Phase 6：参数校验、时间合法性校验、冲突检查、成功 / 失败提示
+1. Phase 7：`GET /api/bookings/my` 与 `services/mock-booking.ts` 的「我的预约」数据源
+2. Phase 7：`BookingCard` 组件与我的预约页的待使用 / 已完成 / 已取消分组展示
+3. Phase 7：预约详情页接入数据（替换 Phase 1 骨架）
 
 ## 6. Current Frontend State
 
@@ -142,19 +156,21 @@ AppID：`wxb97024eb0305368d`
 
 服务（`services/`）：
 - `config.ts`：API 根地址、超时常量，以及开发期数据源开关 `USE_MOCK_DATA` 与模式存储键
-  （Phase 4 追加 `MOCK_AVAIL_MODE_STORAGE_KEY`、Phase 5 追加 `MOCK_AUTH_MODE_STORAGE_KEY`，
-  三个键刻意分开，理由见 §11）
+  （Phase 4 追加 `MOCK_AVAIL_MODE_STORAGE_KEY`、Phase 5 追加 `MOCK_AUTH_MODE_STORAGE_KEY`、
+  Phase 6 追加 `MOCK_BOOKING_MODE_STORAGE_KEY`，四个键刻意分开，理由见 §11）
 - `request.ts`：封装 `wx.request`，统一归一化为 `ApiError`（区分网络失败 / 超时 / HTTP 非 2xx / 业务 code ≠ 0）
 - `resource.ts`（Phase 2 / Phase 4）：资源业务接口
   - `getResources(query)`（Phase 2）
   - `getResourceDetail(id)`（Phase 4）：**资源不存在时 resolve(null) 而不是抛错**，
     使「查无此资源」落到 empty 态、「请求失败」落到 error 态。该约定待 `docs/05_api_contract.md` 确认
   - `getAvailability(resourceId, date)`（Phase 4）→ `GET /api/resources/{id}/availability`
-- `mock-resource.ts`（Phase 2 / Phase 4）：开发期本地数据源
+- `mock-resource.ts`（Phase 2 / Phase 4 / Phase 6）：开发期本地数据源
   - `mockGetResources` / `mockGetResourceDetail` / `mockGetAvailability`
   - `MOCK_SLOT_TEMPLATE`：6 个时段（取自需求 §4.4），`default` 模式下按确定性规则分布
     `BOOKED` / `DISABLED` / `AVAILABLE`，保证任意资源任意日期都能同时看到三种状态
   - **当天已过时的时段按技术设计 §11 标为 `DISABLED`**（不是缺陷；写测试时要注意，见 §11）
+  - Phase 6 起对外导出 `buildDefaultSlots()`（创建预约时服务端要按同一判据校验时段），
+    且 `default` 模式的时段会叠加开发期预约表——已约走的格子立刻显示为 `BOOKED`
 - `auth.ts`（Phase 5）：登录业务接口
   - `login()`：`wx.login()` 取一次性 code → 换登录态 → 写 `store/auth` → 返回 `UserInfo`
   - `logout()`：清本地登录态（通知服务端失效属于 Phase 10）
@@ -164,6 +180,24 @@ AppID：`wxb97024eb0305368d`
     抛出 `ApiError(401001)` 模拟登录失败
   - **刻意不返回 `avatarUrl`**：与「开发期不提供 `imageUrl`」同一决策（测试不依赖网络图片），
     登录页头像用昵称首字占位
+- `booking.ts`（Phase 6）：预约业务接口
+  - `createBooking(payload)` → `POST /api/bookings`，请求头带 `Authorization`（凭证取自 `store/auth`）；
+    显式列出契约里的四个字段，避免将来 payload 增加前端专用字段时被误传
+  - 本层是纯传输层、不做校验：客户端预校验由页面调用 `utils/booking.ts` 完成，
+    服务端返回的 `ApiError.code` 原样交给调用方分流
+- `mock-booking.ts`（Phase 6）：开发期创建预约数据源
+  - `mockCreateBooking(payload)`：延迟 600ms；`CR_MOCK_BOOKING_MODE` 可注入
+    `conflict` / `resource-missing` / `invalid-time` / `param-error` / `unauthorized` / `error`，
+    缺省 `success` 走完整真实校验（参数 → 资源存在 → 时段在开放范围且仍可预约 → 未重复预约）
+  - 交付物不只是「造一条假数据」，而是把**服务端该做的校验**先按技术设计 §11 实现一遍，
+    使页面代码写完后把开关改为 `false` 接真实后端时行为一致
+  - 转出开发期预约表的读/清接口（实现见 `mock-booking-store.ts`），供 Phase 7 取用
+- `mock-booking-store.ts`（Phase 6）：开发期预约表，唯一需要跨数据源共享的可变状态
+  - 落在缓存键 `CR_MOCK_BOOKINGS`（而非模块级变量）：模块级变量在开发者工具每次重新编译时清空，
+    Phase 7 的「我的预约」需要它稳定可读，E2E 也需要能直接清空它
+  - `resetMockBookings()` / `listMockBookings()` / `appendMockBooking()` / `isSlotBooked()` /
+    `overlayBookedSlots()`
+  - 之所以单独成模块：可用时间段与创建预约都要读它，放在任一侧都会造成循环依赖
 
 登录态（`store/auth.ts`，Phase 5 新增）：
 - 模块级内存态 `currentLoginState` / `currentUserInfo` / `currentToken` 是**登录态的真源**
@@ -178,10 +212,18 @@ AppID：`wxb97024eb0305368d`
 - `resource.ts`（Phase 3 追加）：列表页筛选项 `RESOURCE_FILTER_OPTIONS`（首项「全部」，值为空串）、
   类型守卫 `isResourceType()`、参数归一化 `normalizeResourceType()`
 - `date.ts`（Phase 4）：`YYYY-MM-DD` 格式化与校验解析、星期中文名、`HH:mm` 转分钟、
-  日期条选项 `buildDateOptions(days)`
+  日期条选项 `buildDateOptions(days)`；Phase 6 追加 `formatDateTime()`（`YYYY-MM-DD HH:mm:ss`，
+  用于预约的 `createdAt`）
 - `time-slot.ts`（Phase 4）：时段状态中文标签 `getTimeSlotStatusLabel()`、
   是否可选 `isTimeSlotSelectable()`（只认 `AVAILABLE`）、时段文案 `getTimeSlotLabel()`、
   同一时段判定 `isSameTimeSlot()`
+- `booking.ts`（Phase 6）：预约域共享常量与校验
+  - `BOOKING_ERROR_CODE`：`PARAM 400001` / `INVALID_TIME 400002` / `RESOURCE_NOT_FOUND 404001` /
+    `CONFLICT 409001`（编码沿用「HTTP 状态码 × 1000 + 序号」，`CONFLICT` 与技术设计 §13 示例一致）
+  - `validateBookingPayload(payload, now?)`：客户端预校验，返回 `{ ok, code, message }`
+  - `resolveBookingStart(date, startTime)`：把「日期 + 开始时间」合成本地 `Date`
+  - 错误码为什么放在 utils：开发期数据源与真实接口层都要用它，放在任一侧都会形成循环依赖；
+    本文件不 import 任何 services，依赖方向始终单向
 
 页面：
 - `pages/index`（Phase 2 完成，Phase 5 追加用户区）：真实首页，含顶部区域、4 个分类入口、
@@ -196,19 +238,24 @@ AppID：`wxb97024eb0305368d`
   2. **非法 `category` 归一化为「全部」而非错误态**——详情页缺少 `id` 就无事可做，
      但列表页的筛选条件不满足时页面依然可用，一个脏链接不该把功能全部挡掉。
   另：切换分类时比对请求发出时的 `category`，条件已变则丢弃该次过期响应。
-- `pages/resource-detail`（Phase 4 完成）：真实详情页，含图片 / 类型占位、资源信息、7 天日期条、
-  `TimeSlot` 列表、选择时间与预约按钮。四个关键设计：
+- `pages/resource-detail`（Phase 4 完成，Phase 5 加登录门槛，Phase 6 接真实提交）：真实详情页，
+  含图片 / 类型占位、资源信息、7 天日期条、`TimeSlot` 列表、选择时间与预约按钮。七个关键设计：
   1. **资源信息区与时间段区各自独立四态**——切换日期只重新请求时间段，两区共用一个状态会导致
      一次时段请求失败就把资源名称、地点、描述一并清掉，用户连在看哪个资源都不知道；
   2. **日期条是静态内容，不随任何四态变化**——与列表页筛选栏同理（技术设计 §7「禁止白屏」）；
   3. **资源不存在用 empty 态而不是 error 态**——重试没有意义，只给「返回上一页」，
      不给一个注定无效的「重新加载」；
-  4. **切换日期清空已选时段**——时段属于某一天，跨日期沿用会提交出用户并未选择的组合。
-  另：切换日期时比对请求发出时的日期，条件已变则丢弃该次过期响应；
-  「有时段但全部不可预约」仍是 success（时段确实存在且要展示），只额外给一句提示。
-  Phase 5 起 `onSubmit` 增加**未登录分支**：未登录先 `wx.showModal`（「需要登录」/确认文案「去登录」）
-  引导，确认后跳登录页；已登录才给「预约提交功能即将开放」提示（真正提交属 Phase 6）。
-  登录返回后**已选时段仍在**，因为 `navigateBack` 复用原页面实例
+  4. **切换日期清空已选时段**——时段属于某一天，跨日期沿用会提交出用户并未选择的组合；
+  5. **丢弃过期响应**——切换日期时比对请求发出时的日期，条件已变则丢弃该次结果；
+  6. **提交失败要分清「能不能换个方式重试」**（Phase 6，见 §10 第 9 条）——
+     业务失败重试同样的入参永远还是失败，必须让用户换时段；只有网络异常才值得原样重试；
+  7. **客户端预校验不替代服务端校验**——只为「不用等一个来回就知道哪里不对」，
+     「不得早于当前时间」这条尤其只能在提交那一刻重新判定。
+  另：「有时段但全部不可预约」仍是 success（时段确实存在且要展示），只额外给一句提示。
+  Phase 5 起 `onSubmit` 未登录先 `wx.showModal` 引导，确认后跳登录页；登录返回后**已选时段仍在**
+  （`navigateBack` 复用原页面实例）。Phase 6 起已登录走真实提交：提交中按钮为「提交中…」且不可再点，
+  成功 toast + 800ms 后跳转我的预约（跳转前清空已选时段，返回时 `onShow` 重新拉时段），
+  失败时页面内提示条 + toast 同时给出原因
 - `pages/login`（Phase 5 新增）：登录页，未登录时展示登录说明 + 错误区 +「微信一键登录」
   （加载中为「登录中…」）；已登录时展示用户信息（昵称、用户 ID、头像首字占位）+「退出登录」
   （二次确认）。`onShow` 调 `refresh()` 同步登录态；登录成功后 `wx.showToast` 再延迟约 600ms
@@ -281,7 +328,14 @@ cd backend
 仅有一个非业务的健康检查接口：`GET /api/health`。
 
 业务 API 尚未实现；文档中规划的 `GET /api/resources` 等接口属于 Phase 3 / Phase 6 / Phase 7 / Phase 8，
-`POST /api/auth/login` 属于 Phase 10（Phase 5 已在前端按契约调用，当前由开发期数据源顶替）。
+`POST /api/auth/login` 属于 Phase 10。
+
+前端已按契约调用、当前由开发期数据源顶替的接口：
+- `GET /api/resources`（Phase 2）、`GET /api/resources/{id}`、`GET /api/resources/{id}/availability`（Phase 4）
+- `POST /api/auth/login`（Phase 5）
+- `POST /api/bookings`（Phase 6）
+
+尚未被任何前端代码调用的接口：`GET /api/bookings/my`（Phase 7）、`DELETE /api/bookings/{id}`（Phase 8）。
 
 API 设计以：
 `docs/05_api_contract.md`
@@ -338,7 +392,7 @@ API 设计以：
    - 解析 `page.callMethod()` 调用 async 方法时，其返回的 Promise 无法被序列化；
      需要「触发页面方法并读状态」时，在同一次 `evaluate` 内先调用再读，可稳定捕获瞬时状态。
    - 现成可用的端到端脚本与说明见 `tools/e2e/`（Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、
-     Phase 4 81/81、Phase 5 63/63 通过）。
+     Phase 4 81/81、Phase 5 64/64、Phase 6 61/61 通过）。
 
 6. **模拟器的路由过渡必须先收尾再发下一次导航（Phase 3 实测，极易误判为产品缺陷）**：
    - `wx.navigateTo` / `wx.navigateBack` 的**栈顶路由更新很快，但整段过渡动画约 1.2 秒才
@@ -391,6 +445,30 @@ API 设计以：
      两个登录页、`navigateBack` 到不了来源页；**mock 会把当天已过时时段标 `DISABLED`**，
      傍晚跑测试时当天可预约时段为 0，断言前须先切到明天），见 `tools/e2e/README.md` 第 19–24 条。
 
+9. **提交失败的「分流」是产品行为，不是错误处理细节（Phase 6 实测）**：
+   - **业务失败与网络失败必须分开**：冲突 / 参数错误 / 非法时间重试同样的入参永远还是失败，
+     只有网络异常才值得原样重试。因此页面按 `ApiError.code` 分流：
+     冲突 → 立即重取时段（否则那一格还显示为可预约，用户会反复点一个必然失败的按钮）；
+     资源不存在 → 重新加载详情落到 empty 态；`401` → 清掉本地登录态并引导重新登录
+     （继续保留「已登录」只会让用户反复碰壁）。
+   - **失败原因要同时留在页面上**：toast 会消失，而「该时段已被预约」是需要用户据此改变行为的
+     提示。E2E 也借此少依赖「临时替换 `wx.showToast`」这种脆弱手段。
+   - **开发期数据源的时段状态必须包含真实预约**：`mockGetAvailability` 叠加了预约表
+     （见 §6 的 `mock-booking-store.ts`）。不做这一步就会出现自相矛盾——服务端刚以
+     「该时间段已被预约」拒绝，页面刷新后却仍显示它可预约。
+   - **提交成功后的时段是旧快照**：跳转前清空已选时段、返回详情页时在 `onShow` 重新拉取；
+     断言这一点要轮询「那个时段变成了 `BOOKED`」，不能只等 `slotState === 'success'`
+     ——返回瞬间它还是上一次的 `success`，会读到旧值。
+   - **写 E2E 时，`await` 之后才弹出的 toast 截获不到**：临时替换 `wx.showToast` 再在 `finally`
+     还原的写法，同步部分一结束就还原了。改用常驻探针（装一次、留在原地、整段用完再还原）；
+     同理，「提交中…」这类瞬时状态要在同一次 `evaluate` 里「调用后立刻读 `page.data`」，
+     不要用固定 `sleep` 去赌 600ms 的窗口。三条均见 `tools/e2e/README.md` 第 25–27 条。
+   - **存活过久、跨越多次源码重新编译的自动化会话会让 `page.data()` 报 `page node not found`**：
+     此时 `getCurrentPages()` 与 `mp.currentPage()` 都还正常，唯独取页面节点数据失败，
+     表现为测试一开始就连环中断、极易误判为脚本写错。修法是重启自动化会话
+     （`cli.bat close --project <小程序目录>` 后再 `node ./start-automation.js`）。
+     见 `tools/e2e/README.md` 第 28 条。
+
 ## 11. Important Decisions
 
 采用：
@@ -431,28 +509,43 @@ CampusReserve/          # 仓库根
 Git 提交规范：中文 Conventional Commits，`<type>(<scope>): <中文简述>`。
 Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 
-开发期数据源（Phase 2 引入，Phase 4 / Phase 5 扩展，临时机制）：
+开发期数据源（Phase 2 引入，Phase 4 / Phase 5 / Phase 6 扩展，临时机制）：
 - 前端页面先于后端实现，`services/config.ts` 的 `USE_MOCK_DATA` 为 `true` 时，
-  由 `services/mock-resource.ts` 与 `services/mock-auth.ts` 提供与 `Resource` / `Availability` /
-  `AuthSession` 类型一致的本地数据，使页面在后端 API（Phase 10）落地前即可验证
-  success / empty / error 三种展示与登录 / 登录失败两条路径。
+  由 `services/mock-resource.ts` / `services/mock-auth.ts` / `services/mock-booking.ts` 提供与
+  `Resource` / `Availability` / `AuthSession` / `Booking` 类型一致的本地数据，
+  使页面在后端 API（Phase 10）落地前即可验证 success / empty / error 三种展示、
+  登录 / 登录失败两条路径，以及创建预约的成功与六种失败路径。
 - 该开关只决定数据来源，页面与组件代码不感知；后端联调时改为 `false` 即切到真实接口。
-- 三个模式存储键供调试与端到端测试注入，属开发期机制，联调前应连同开关一并移除：
+- 四个模式存储键供调试与端到端测试注入，属开发期机制，联调前应连同开关一并移除：
   - `CR_MOCK_MODE`（`success` | `empty` | `error`）：作用于资源列表与资源详情，
     `empty` 在详情页的含义是「该资源不存在」
   - `CR_MOCK_AVAIL_MODE`（`default` | `full` | `none` | `error`，Phase 4 追加）：作用于可用时间段，
     `full` 用于验证「全部约满时按钮保持禁用」，`none` 用于验证时间段空态
   - `CR_MOCK_AUTH_MODE`（`success`(缺省) | `error`，Phase 5 追加）：作用于登录，
     `error` 用于验证「登录失败提示 + 可重试」
-- **三个键刻意分开**：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
-  登录的 `error` 指「登录接口失败」——一个键表达不了这些组合
-  （例如「详情正常但该日期时段为空」「资源列表正常但登录失败」）。
+  - `CR_MOCK_BOOKING_MODE`（Phase 6 追加）：作用于创建预约，`success`(缺省) 走完整真实校验，
+    其余六值分别是 `conflict` / `resource-missing` / `invalid-time` / `param-error` /
+    `unauthorized` / `error`，覆盖从客户端凭据无法构造的失败路径
+- **四个键刻意分开**：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
+  登录的 `error` 指「登录接口失败」，创建预约的 `conflict` 指「时段已被约走」——
+  一个键表达不了这些组合（例如「详情正常但该日期时段为空」「资源列表正常但登录失败」
+  「登录成功但预约时段已被别人约走」）。
+- 另有一个数据键（不是模式开关）：`CR_MOCK_BOOKINGS` 存开发期已创建的预约，
+  见 `services/mock-booking-store.ts`。
 - 已定决策：**开发期数据源不提供 `imageUrl`、也不提供 `avatarUrl`**，因此详情页与资源卡片始终展示
   类型占位块、登录页头像用昵称首字占位。
   这是为了让端到端测试不依赖网络图片。真实图片资源待 Phase 9（体验优化）/ Phase 12（作品集整理）
   统一补齐，届时只需给 mock 数据或后端数据补 `imageUrl` / `avatarUrl`，页面代码无需改动。
 - 已定决策（Phase 5）：**登录态的真源是 `store/auth.ts` 的模块级内存态**，本地缓存只作冷启动恢复用；
   不引入全局状态库（项目不使用 Redux / MobX 一类方案），页面在 `onShow` 从 `store` 取副本即可。
+- 已定决策（Phase 6）：**预约业务错误码沿用「HTTP 状态码 × 1000 + 序号」**
+  （`400001` 参数错误 / `400002` 非法时间 / `404001` 资源不存在 / `409001` 冲突），
+  与技术设计 §13 的响应示例一致；常量定义在 `utils/booking.ts`，
+  由开发期数据源与真实接口层共用（放任一侧都会造成循环依赖）。
+  `401` 用客户端错误码 `ApiErrorCode.UNAUTHORIZED`（负值），与后端的 HTTP 401 语义对齐。
+- 已定决策（Phase 6）：**「时间段是否仍可用」永远由服务端判定**，客户端只判「不依赖服务端数据
+  就能判定的部分」（资源 ID / 日期 / 时间格式与先后 / 不得早于当前时间）。
+  原因是页面上的时段是加载时的快照，用户停留久了、或别人抢先预约了，它就不再成立。
 
 当前不使用：
 - Redis
@@ -487,10 +580,12 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 ## 14. Last Updated
 
 更新时间：2026-09-15  
-最后完成任务：Phase 5 用户登录完成并通过端到端测试（真实开发者工具中 63/63 通过，
-Phase 1 / Phase 2 / Phase 3 / Phase 4 回归 36/36、47/47、65/65、81/81）；实现登录入口、微信一键登录流程、
-登录态保存（内存态真源 + 本地缓存 + `globalData` 镜像）、用户信息展示、登录失败与重试、未登录引导
-（我的预约页引导 + 详情页点预约先弹登录引导）、退出登录与冷启动恢复；
-新增 `store/auth.ts`、`services/auth.ts`、`services/mock-auth.ts`、`pages/login`，
-并摸清登录态读取点与登录页导航的两条硬约束（新增已知问题 8）  
+最后完成任务：Phase 6 创建预约完成并通过端到端测试（真实开发者工具中 61/61 通过，
+Phase 1 / Phase 2 / Phase 3 / Phase 4 / Phase 5 回归 36/36、47/47、65/65、81/81、64/64）；
+实现 Booking 数据模型、`POST /api/bookings` 前端接入、详情页真实提交（提交中态 / 成功提示与跳转 /
+按错误码分流的失败提示），客户端预校验与时间合法性校验、三层冲突检查，以及未登录、时间冲突、
+资源不存在、参数错误、非法时间、网络异常、登录态失效七条异常路径；
+新增 `services/booking.ts`、`services/mock-booking.ts`、`services/mock-booking-store.ts`、
+`utils/booking.ts`，并为开发期数据源补齐「可用时间段叠加真实预约」这一自洽性；
+摸清提交失败分流与 E2E 反馈探针的四条实测约束（新增已知问题 9）  
 更新者：Developer（AI 协同）
