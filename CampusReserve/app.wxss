@@ -1,0 +1,10 @@
+/* app.wxss —— 全局样式
+   Phase 1 会在此建立完整的基础样式与设计变量。 */
+
+page {
+  background-color: #f5f6f8;
+  color: #1f2329;
+  font-size: 28rpx;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+}

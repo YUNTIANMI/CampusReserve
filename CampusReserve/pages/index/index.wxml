@@ -1,0 +1,21 @@
+<view class="page">
+  <view class="hero">
+    <text class="hero__title">{{projectName}}</text>
+    <text class="hero__desc">{{description}}</text>
+  </view>
+
+  <view class="card">
+    <view class="card__row">
+      <text class="card__label">当前阶段</text>
+      <text class="card__value">{{phase}}</text>
+    </view>
+    <view class="card__row">
+      <text class="card__label">技术栈</text>
+      <text class="card__value">{{stack}}</text>
+    </view>
+  </view>
+
+  <view class="hint">
+    <text>工程骨架已就绪，页面路由与组件将在 Phase 1 搭建。</text>
+  </view>
+</view>
