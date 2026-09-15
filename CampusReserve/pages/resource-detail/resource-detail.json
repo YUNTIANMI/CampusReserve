@@ -1,6 +1,9 @@
 {
   "usingComponents": {
-    "error-state": "/components/error-state/error-state"
+    "loading-state": "/components/loading-state/loading-state",
+    "empty-state": "/components/empty-state/empty-state",
+    "error-state": "/components/error-state/error-state",
+    "time-slot": "/components/time-slot/time-slot"
   },
   "navigationBarTitleText": "资源详情"
 }

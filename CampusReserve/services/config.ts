@@ -24,9 +24,9 @@ export const ENABLE_REQUEST_LOG = true
 /**
  * 是否使用开发期本地数据源（临时开关，联调后置为 false）。
  *
- * 背景：后端业务 API 属于 Phase 10，前端页面（Phase 2 / Phase 3）先于后端实现。
+ * 背景：后端业务 API 属于 Phase 10，前端页面（Phase 2 / Phase 3 / Phase 4）先于后端实现。
  * 若此时直接请求后端，接口一律 404，页面只能落到 error 态，无法验证 success / empty 展示。
- * 因此由 services/mock-resource.ts 提供与 Resource 类型一致的本地数据，
+ * 因此由 services/mock-resource.ts 提供与 Resource / Availability 类型一致的本地数据，
  * 请求链路（services/resource.ts）与页面代码保持不变，联调时把本开关改为 false 即可切到真实接口。
  *
  * 该开关只决定数据来源，不改变任何页面逻辑。
@@ -36,5 +36,21 @@ export const USE_MOCK_DATA = true
 /**
  * 开发期数据源模式存储键，取值 'success' | 'empty' | 'error'。
  * 用于调试与端到端测试注入三种响应，缺省为 'success'。
+ * 作用于资源列表与资源详情（Phase 4 起也用于详情）。
  */
 export const MOCK_MODE_STORAGE_KEY = 'CR_MOCK_MODE'
+
+/**
+ * 开发期「可用时间段」数据源模式存储键，取值 'default' | 'full' | 'none' | 'error'。
+ *
+ * 为什么与 MOCK_MODE_STORAGE_KEY 分开：两者的语义不同——列表/详情的 empty 指「没有资源」，
+ * 而时间段的 empty 指「该日期没有时段」，用一个键表达不了
+ * 「详情正常但该日期时段为空」这种组合，端到端测试需要分别控制。
+ *
+ * 取值含义：
+ * - `default`：混合状态，任意资源任意日期都同时存在可预约与不可预约时段
+ * - `full`：全部时段 `BOOKED`，用于验证「无可选时段时按钮保持禁用」
+ * - `none`：该日期没有任何时段，用于验证时间段的空态
+ * - `error`：请求失败，用于验证时间段的错误态与重试
+ */
+export const MOCK_AVAIL_MODE_STORAGE_KEY = 'CR_MOCK_AVAIL_MODE'

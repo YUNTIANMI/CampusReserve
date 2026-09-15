@@ -1,0 +1,9 @@
+<view
+  class="time-slot {{selectable ? '' : 'time-slot--disabled'}} {{selected ? 'time-slot--selected' : ''}}"
+  hover-class="{{hoverClass}}"
+  hover-stay-time="80"
+  bindtap="handleTap"
+>
+  <text class="time-slot__label">{{label}}</text>
+  <text class="time-slot__status">{{statusLabel}}</text>
+</view>

@@ -5,12 +5,14 @@
  * 用途是让前端页面在后端业务 API（Phase 10）落地前就能验证 success / empty / error 三种展示。
  *
  * 约束：
- * 1. 数据形态严格对齐 types/resource.ts 的 `Resource`；
+ * 1. 数据形态严格对齐 types/resource.ts 的 `Resource` / `Availability`；
  * 2. 返回 Promise 并带模拟延迟，接口形态与 services/request.ts 一致（失败时 reject `ApiError`），
- *    使页面代码切换到真实接口时无需改动。
+ *    使页面代码切换到真实接口时无需改动；
+ * 3. Phase 4 追加资源详情与可用时间段，其中「已过期时段」按本机当前时间计算。
  */
-import type { Resource, ResourceQuery } from '../types/resource'
-import { MOCK_MODE_STORAGE_KEY } from './config'
+import type { Availability, Resource, ResourceQuery, TimeSlot, TimeSlotStatus } from '../types/resource'
+import { formatDate, toMinutes } from '../utils/date'
+import { MOCK_AVAIL_MODE_STORAGE_KEY, MOCK_MODE_STORAGE_KEY } from './config'
 import { ApiError, ApiErrorCode } from './request'
 
 /** 模拟网络延迟（毫秒），用于观察 loading 态 */
@@ -127,6 +129,128 @@ export function mockGetResources(query: ResourceQuery = {}): Promise<Resource[]>
 
       // 返回副本，避免调用方修改返回值时污染数据源
       resolve(list.map((item) => ({ ...item })))
+    }, MOCK_DELAY)
+  })
+}
+
+/**
+ * 从本地数据源取单个资源详情。
+ *
+ * 「资源不存在」用 resolve(null) 表达而不是抛错：接口正常返回、只是没有这条数据，
+ * 页面据此落到 empty 态并给出「资源不存在」，与网络/服务异常（error 态）区分开。
+ * 因此 `empty` 模式在这里的含义是「该资源不存在」。
+ *
+ * @throws {ApiError} 数据源模式为 'error' 时抛出
+ */
+export function mockGetResourceDetail(id: number): Promise<Resource | null> {
+  const mode = readMockMode()
+
+  return new Promise<Resource | null>((resolve, reject) => {
+    setTimeout(() => {
+      if (mode === 'error') {
+        reject(new ApiError(ApiErrorCode.NETWORK, '网络连接失败，请检查网络后重试'))
+        return
+      }
+
+      if (mode === 'empty') {
+        resolve(null)
+        return
+      }
+
+      const hit = MOCK_RESOURCES.find((item) => item.id === id)
+      resolve(hit ? { ...hit } : null)
+    }, MOCK_DELAY)
+  })
+}
+
+/** 开发期可用时间段模板，时段取自需求 §4.4 的示例 */
+export const MOCK_SLOT_TEMPLATE: Array<Pick<TimeSlot, 'startTime' | 'endTime'>> = [
+  { startTime: '09:00', endTime: '10:00' },
+  { startTime: '10:00', endTime: '11:00' },
+  { startTime: '11:00', endTime: '12:00' },
+  { startTime: '14:00', endTime: '15:00' },
+  { startTime: '15:00', endTime: '16:00' },
+  { startTime: '16:00', endTime: '17:00' },
+]
+
+/** 开发期可用时间段数据源模式 */
+export type MockAvailMode = 'default' | 'full' | 'none' | 'error'
+
+/**
+ * 读取当前可用时间段数据源模式。
+ * 通过 `wx.setStorageSync('CR_MOCK_AVAIL_MODE', 'full')` 可在调试与端到端测试中注入不同响应。
+ */
+export function readMockAvailMode(): MockAvailMode {
+  const raw: unknown = wx.getStorageSync(MOCK_AVAIL_MODE_STORAGE_KEY)
+  return raw === 'full' || raw === 'none' || raw === 'error' ? raw : 'default'
+}
+
+/**
+ * 生成 `default` 模式下的时间段。
+ *
+ * 状态规则（刻意保持确定性，便于端到端测试断言）：
+ * 1. 已被预约：从 `(resourceId + 日) % 6` 开始连续 1~2 个时段标为 `BOOKED`——
+ *    无论哪个资源哪一天，都**同时存在**可预约与已约满时段，三种状态都能被看到；
+ * 2. 已过期：日期是今天且时段开始时间不晚于当前时间，一律标为 `DISABLED`
+ *    （技术设计 §11「时间不得早于当前时间」）。已过期优先于已约满——
+ *    一个已经过去的时段，对用户就是「不可预约」，不必再区分它当初是否被约满。
+ */
+function buildDefaultSlots(resourceId: number, date: string): TimeSlot[] {
+  const day = Number(date.slice(8, 10)) || 1
+  const total = MOCK_SLOT_TEMPLATE.length
+  const bookedFrom = (resourceId + day) % total
+  const bookedCount = 1 + ((resourceId + day) % 2)
+
+  const booked = new Set<number>()
+  for (let i = 0; i < bookedCount; i++) {
+    booked.add((bookedFrom + i) % total)
+  }
+
+  const now = new Date()
+  const isTodayDate = date === formatDate(now)
+  const nowMinutes = now.getHours() * 60 + now.getMinutes()
+
+  return MOCK_SLOT_TEMPLATE.map((template, index) => {
+    let status: TimeSlotStatus = booked.has(index) ? 'BOOKED' : 'AVAILABLE'
+    if (isTodayDate && toMinutes(template.startTime) <= nowMinutes) {
+      status = 'DISABLED'
+    }
+    return { startTime: template.startTime, endTime: template.endTime, status }
+  })
+}
+
+/**
+ * 从本地数据源取指定资源在指定日期的可用时间段。
+ *
+ * @throws {ApiError} 数据源模式为 'error' 时抛出
+ */
+export function mockGetAvailability(resourceId: number, date: string): Promise<Availability> {
+  const mode = readMockAvailMode()
+
+  return new Promise<Availability>((resolve, reject) => {
+    setTimeout(() => {
+      if (mode === 'error') {
+        reject(new ApiError(ApiErrorCode.NETWORK, '网络连接失败，请检查网络后重试'))
+        return
+      }
+
+      if (mode === 'none') {
+        resolve({ resourceId, date, slots: [] })
+        return
+      }
+
+      if (mode === 'full') {
+        resolve({
+          resourceId,
+          date,
+          slots: MOCK_SLOT_TEMPLATE.map(
+            (template): TimeSlot => ({ ...template, status: 'BOOKED' }),
+          ),
+        })
+        return
+      }
+
+      resolve({ resourceId, date, slots: buildDefaultSlots(resourceId, date) })
     }, MOCK_DELAY)
   })
 }

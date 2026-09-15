@@ -1,7 +1,162 @@
-.nav {
-  margin-top: 48rpx;
+/* ---------- 图片展示 ---------- */
+
+.detail-hero {
+  width: 100%;
+  height: 360rpx;
+  margin-bottom: var(--cr-space-lg);
+  overflow: hidden;
+  background-color: var(--cr-color-surface);
+  border-radius: var(--cr-radius-lg);
 }
 
-.nav__second {
-  margin-top: 20rpx;
+.detail-hero__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 无图时的类型占位：与 ResourceCard 的占位块同一处理方式 */
+.detail-hero__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: var(--cr-font-xl);
+  color: var(--cr-color-text-muted);
+}
+
+/* ---------- 资源信息 ---------- */
+
+.info__name {
+  font-size: var(--cr-font-xxl);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--cr-color-text);
+}
+
+.info__meta {
+  display: flex;
+  align-items: center;
+  margin-top: var(--cr-space-sm);
+}
+
+.info__tag {
+  height: 40rpx;
+  padding: 0 var(--cr-space-sm);
+  font-size: var(--cr-font-xs);
+  line-height: 40rpx;
+  color: var(--cr-color-primary);
+  background-color: rgba(47, 107, 255, 0.08);
+  border-radius: var(--cr-radius-sm);
+}
+
+.info__capacity {
+  margin-left: var(--cr-space-sm);
+  font-size: var(--cr-font-sm);
+  color: var(--cr-color-text-secondary);
+}
+
+.info__location {
+  margin-top: var(--cr-space-sm);
+  font-size: var(--cr-font-sm);
+  color: var(--cr-color-text-muted);
+}
+
+.info__desc {
+  margin-top: var(--cr-space-sm);
+  font-size: var(--cr-font-sm);
+  line-height: 1.7;
+  color: var(--cr-color-text-secondary);
+}
+
+/* ---------- 日期条 ---------- */
+
+/* scroll-view 横向滚动容器：enable-flex 使 display: flex 对其内容生效 */
+.date-bar {
+  display: flex;
+}
+
+.date-bar__item {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 128rpx;
+  padding: var(--cr-space-sm) 0;
+  margin-right: var(--cr-space-sm);
+  background-color: var(--cr-color-surface);
+  border-radius: var(--cr-radius-md);
+}
+
+.date-bar__item:last-child {
+  margin-right: 0;
+}
+
+.date-bar__item--hover {
+  background-color: var(--cr-color-hover);
+}
+
+.date-bar__item--active {
+  background-color: var(--cr-color-primary);
+}
+
+.date-bar__weekday {
+  font-size: var(--cr-font-xs);
+  color: var(--cr-color-text-muted);
+}
+
+.date-bar__date {
+  margin-top: 6rpx;
+  font-size: var(--cr-font-sm);
+  font-weight: 600;
+  color: var(--cr-color-text);
+}
+
+/* 激活项文字用白色：覆盖上面两条的文字色 */
+.date-bar__item--active .date-bar__weekday,
+.date-bar__item--active .date-bar__date {
+  color: #ffffff;
+}
+
+/* ---------- 时间段 ---------- */
+
+.slots {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* 一行 3 个，间距 16rpx：宽度 = (100% - 2 * 16rpx) / 3 */
+.slots__item {
+  width: calc((100% - 32rpx) / 3);
+  margin: 0 var(--cr-space-sm) var(--cr-space-sm) 0;
+}
+
+.slots__item:nth-child(3n) {
+  margin-right: 0;
+}
+
+.slots__hint {
+  margin-top: var(--cr-space-xs);
+  font-size: var(--cr-font-sm);
+  line-height: 1.6;
+  color: var(--cr-color-text-muted);
+}
+
+/* ---------- 预约入口 ---------- */
+
+.submit {
+  margin-top: var(--cr-space-xl);
+}
+
+.submit__summary {
+  margin-bottom: var(--cr-space-sm);
+  font-size: var(--cr-font-sm);
+  line-height: 1.6;
+  color: var(--cr-color-text);
+}
+
+.submit__summary--muted {
+  color: var(--cr-color-text-muted);
 }

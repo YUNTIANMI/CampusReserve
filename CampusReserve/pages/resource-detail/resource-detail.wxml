@@ -1,5 +1,5 @@
 <view class="cr-page">
-  <!-- 参数缺失：不渲染空白页，给出明确提示 -->
+  <!-- 参数缺失或非法：不渲染空白页，给出明确提示 -->
   <error-state
     wx:if="{{!hasValidId}}"
     message="缺少或非法的资源 ID 参数"
@@ -8,41 +8,116 @@
   />
 
   <block wx:else>
-    <view class="cr-section">
-      <view class="cr-section__title">资源详情</view>
-      <view class="cr-section__desc">
-        Phase 1 建立页面骨架与参数接收；Phase 4 接入资源信息、日期选择与可用时间段。
-      </view>
-    </view>
+    <!-- 资源信息区：四态互斥，任何时刻只渲染其一 -->
+    <loading-state wx:if="{{pageState === 'loading'}}" text="正在加载资源详情" />
 
-    <view class="cr-card">
-      <view class="cr-list__item">
-        <text class="cr-text-secondary cr-text-sm">资源 ID</text>
-        <text class="cr-text-strong">{{resourceId}}</text>
-      </view>
-      <view class="cr-list__item">
-        <text class="cr-text-secondary cr-text-sm">图片 / 名称 / 类型</text>
-        <text class="cr-text-muted cr-text-sm">Phase 4 接入</text>
-      </view>
-      <view class="cr-list__item">
-        <text class="cr-text-secondary cr-text-sm">地点 / 容量 / 描述</text>
-        <text class="cr-text-muted cr-text-sm">Phase 4 接入</text>
-      </view>
-      <view class="cr-list__item">
-        <text class="cr-text-secondary cr-text-sm">可用时间段</text>
-        <text class="cr-text-muted cr-text-sm">Phase 4 接入</text>
-      </view>
-    </view>
+    <error-state
+      wx:elif="{{pageState === 'error'}}"
+      message="{{errorMessage}}"
+      bind:retry="onRetryDetail"
+    />
 
-    <view class="cr-section nav">
-      <view class="cr-section__title">骨架导航</view>
-      <view class="cr-section__desc">用于验证页面路由。</view>
-      <view class="cr-btn cr-btn--primary cr-btn--block" hover-class="cr-hover" bindtap="onOpenBookings">
-        进入我的预约
+    <!-- 资源不存在：重试无意义，只给「返回上一页」 -->
+    <empty-state
+      wx:elif="{{pageState === 'empty'}}"
+      text="资源不存在"
+      description="该资源可能已下架，请返回列表重新选择"
+      action-text="返回上一页"
+      bind:action="onBack"
+    />
+
+    <block wx:else>
+      <!-- 图片展示；无图时用类型名占位，避免出现空白块 -->
+      <view class="detail-hero">
+        <image
+          class="detail-hero__image"
+          wx:if="{{resource.imageUrl}}"
+          src="{{resource.imageUrl}}"
+          mode="aspectFill"
+        />
+        <view class="detail-hero__placeholder" wx:else>{{typeLabel}}</view>
       </view>
-      <view class="cr-btn cr-btn--ghost cr-btn--block nav__second" hover-class="cr-hover" bindtap="onBack">
-        返回上一页
+
+      <!-- 资源信息 -->
+      <view class="cr-section info">
+        <view class="info__name">{{resource.name}}</view>
+        <view class="info__meta">
+          <text class="info__tag">{{typeLabel}}</text>
+          <text class="info__capacity">可容纳 {{resource.capacity}} 人</text>
+        </view>
+        <view class="info__location">{{resource.location}}</view>
+        <view class="info__desc">{{resource.description}}</view>
       </view>
-    </view>
+
+      <!--
+        日期选择：静态内容，不随资源信息区与时间段区的四态变化。
+        某个日期取不到时段时，用户仍应能切换到其他日期。
+      -->
+      <view class="cr-section">
+        <view class="cr-section__title">选择日期</view>
+        <scroll-view class="date-bar" scroll-x enable-flex scroll-with-animation>
+          <view
+            class="date-bar__item {{item.value === selectedDate ? 'date-bar__item--active' : ''}}"
+            wx:for="{{dateOptions}}"
+            wx:key="value"
+            data-value="{{item.value}}"
+            hover-class="date-bar__item--hover"
+            hover-stay-time="80"
+            bindtap="onTapDate"
+          >
+            <text class="date-bar__weekday">{{item.isToday ? '今天' : item.weekday}}</text>
+            <text class="date-bar__date">{{item.shortLabel}}</text>
+          </view>
+        </scroll-view>
+      </view>
+
+      <!-- 可用时间段：状态独立于资源信息区 -->
+      <view class="cr-section">
+        <view class="cr-section__title">选择时间段</view>
+
+        <loading-state wx:if="{{slotState === 'loading'}}" text="正在加载时间段" />
+
+        <error-state
+          wx:elif="{{slotState === 'error'}}"
+          message="{{slotError}}"
+          bind:retry="onRetrySlots"
+        />
+
+        <empty-state
+          wx:elif="{{slotState === 'empty'}}"
+          text="该日期暂无开放时段"
+          description="请选择其他日期查看"
+        />
+
+        <block wx:else>
+          <view class="slots">
+            <view class="slots__item" wx:for="{{slots}}" wx:key="startTime">
+              <time-slot
+                slot-data="{{item}}"
+                selected="{{selectedSlot && selectedSlot.startTime === item.startTime}}"
+                bind:slottap="onTapSlot"
+              />
+            </view>
+          </view>
+          <view class="slots__hint" wx:if="{{slotHint}}">{{slotHint}}</view>
+        </block>
+      </view>
+
+      <!-- 预约入口 -->
+      <view class="submit">
+        <view class="submit__summary" wx:if="{{selectedSlot}}">
+          已选时段 {{selectedSlot.startTime}}-{{selectedSlot.endTime}}（{{selectedDate}} {{selectedWeekday}}）
+        </view>
+        <view class="submit__summary submit__summary--muted" wx:else>
+          请选择上方任一时间段后再提交
+        </view>
+        <view
+          class="submit__button cr-btn cr-btn--block {{canSubmit ? 'cr-btn--primary' : 'cr-btn--disabled'}}"
+          hover-class="{{canSubmit ? 'cr-hover' : 'none'}}"
+          hover-stay-time="80"
+          bindtap="onSubmit"
+        >{{submitText}}</view>
+      </view>
+    </block>
   </block>
 </view>
