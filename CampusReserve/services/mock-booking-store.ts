@@ -16,7 +16,7 @@
  *
  * 这只是开发期机制：联调前应随 `USE_MOCK_DATA` 一并移除，真实持久化由 Phase 10 的数据库承担。
  */
-import type { Booking } from '../types/booking'
+import type { Booking, BookingStatus } from '../types/booking'
 import type { TimeSlot } from '../types/resource'
 
 /** 开发期预约表缓存键 */
@@ -79,6 +79,29 @@ export function appendMockBooking(input: Omit<Booking, 'id'>): Booking {
   state.list.push(booking)
   writeState(state)
   return { ...booking }
+}
+
+/**
+ * 更新一条预约的状态（Phase 8：取消预约）。
+ *
+ * 只改 `status`，其余字段原样保留——取消不是「重新写一条记录」，
+ * 预约编号、创建时间都必须与原来一致，否则用户在列表里看到的就是另一条数据了。
+ *
+ * @returns 更新后的记录；ID 不存在时返回 null（由调用方决定是报错还是忽略）
+ */
+export function updateMockBookingStatus(
+  bookingId: number,
+  status: BookingStatus,
+): Booking | null {
+  const state = readState()
+  const index = state.list.findIndex((item) => item.id === bookingId)
+  if (index < 0) {
+    return null
+  }
+  const updated: Booking = { ...state.list[index], status }
+  state.list[index] = updated
+  writeState(state)
+  return { ...updated }
 }
 
 /**

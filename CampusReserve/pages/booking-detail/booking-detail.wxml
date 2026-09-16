@@ -63,7 +63,18 @@
         </view>
       </view>
 
+      <!-- 取消失败的原因留在页面上：toast 会消失，而用户正盯着这条记录想知道下一步怎么办 -->
+      <view wx:if="{{cancelError}}" class="cancel__error">{{cancelError}}</view>
+
       <view class="nav">
+        <!-- 只有「待使用」的预约才展示取消按钮（需求 §4.7「有效预约」） -->
+        <view
+          wx:if="{{canCancel}}"
+          class="cr-btn action action--danger {{canceling ? 'cr-btn--disabled' : ''}}"
+          hover-class="cr-hover"
+          bindtap="onCancel"
+        >{{canceling ? '取消中…' : '取消预约'}}</view>
+
         <view class="cr-btn cr-btn--ghost cr-btn--block" hover-class="cr-hover" bindtap="onOpenBookings">
           返回我的预约
         </view>

@@ -5,7 +5,7 @@
  * Phase 7：接入预约详情数据展示。
  * Phase 8：实现取消预约（DELETE /api/bookings/{id}）与状态刷新。
  *
- * 三个刻意的设计判断：
+ * 七个刻意的设计判断：
  * 1. **数据来源复用 `GET /api/bookings/my` 再按 id 查找**，不新增按 id 直查的接口。
  *    技术设计 §3 的接口清单里没有 `GET /api/bookings/{id}`，本阶段不擅自扩充契约；
  *    而且 `/my` 本来就只返回本人的数据，查不到即等于「不存在或无权访问」——
@@ -15,17 +15,35 @@
  *    重试没有意义；给「重新加载」按钮只会让用户点一次失望一次。
  * 3. **本页不处理登录态**。登录态失效时 `/my` 会失败，本页统一按「查不到」处理；
  *    清掉本地登录态并引导重新登录由「我的预约」页负责（它才是登录后的主入口），
- *    不在每一页重复同一套逻辑。
+ *    不在每一页重复同一套逻辑。Phase 8 取消失败遇到 401 也照此办理：只提示，不跳登录。
+ * 4. **取消后停在本页，不自动返回**（Phase 8）。取消是不可逆的，用户需要亲眼看到
+ *    「已取消」这个结果；自动跳走会让人怀疑到底有没有取消成功。
+ *    返回上一页时的刷新是自然发生的——「我的预约」的 onShow 每次都重新拉取。
+ * 5. **取消必须二次确认**（Phase 8）。原时段一旦释放就可能立刻被别人约走，
+ *    不是「取消了还能原样约回来」的操作，一次误触的代价不该由用户承担。
+ * 6. **取消中的防重复与提交预约同理**（Phase 8）：一次点击只发一个请求，
+ *    期间按钮置灰并显示「取消中…」。
+ * 7. **只给「值得重试」的失败以重试机会**（Phase 8）。网络异常保留按钮并给出错误条；
+ *    而「该预约已取消 / 已结束」说明页面上的数据已经过期，重试必然失败——
+ *    正确做法是直接重新拉详情，把页面刷成真实状态。
  */
-import { getBookingDetail } from '../../services/booking'
+import { cancelBooking, getBookingDetail } from '../../services/booking'
 import { ApiError, ApiErrorCode } from '../../services/request'
-import { BOOKING_STATUS_LABELS, resolveBookingStatus } from '../../utils/booking'
+import {
+  BOOKING_ERROR_CODE,
+  BOOKING_STATUS_LABELS,
+  canCancelBooking,
+  resolveBookingStatus,
+} from '../../utils/booking'
 import { getWeekdayLabel } from '../../utils/date'
 import type { Booking, BookingStatus } from '../../types/booking'
 import type { PageState } from '../../types/page'
 
 /** 兜底错误文案，非 ApiError 时使用 */
 const FALLBACK_ERROR = '预约详情加载失败，请稍后重试'
+
+/** 取消失败的兜底文案 */
+const FALLBACK_CANCEL_ERROR = '取消失败，请稍后重试'
 
 /**
  * 值得「原样重试」的错误码：只有网络、超时与 HTTP 层故障。
@@ -65,6 +83,13 @@ Page({
     statusModifier: 'pending',
     /** 下单时间 */
     createdAt: '',
+
+    /** 当前是否允许取消：由派生状态决定，已结束 / 已取消的都不显示按钮（需求 §4.7） */
+    canCancel: false,
+    /** 取消请求进行中：用于防重复与按钮文案 */
+    canceling: false,
+    /** 取消失败的原因；与 toast 的区别是它不会消失 */
+    cancelError: '',
   },
 
   onLoad(query: Record<string, string | undefined>) {
@@ -83,7 +108,7 @@ Page({
 
   /** 拉取预约详情 */
   async loadDetail() {
-    this.setData({ pageState: 'loading', errorMessage: '' })
+    this.setData({ pageState: 'loading', errorMessage: '', cancelError: '' })
 
     try {
       const booking = await getBookingDetail(this.data.bookingId)
@@ -117,7 +142,87 @@ Page({
       statusLabel: BOOKING_STATUS_LABELS[status],
       statusModifier: status.toLowerCase(),
       createdAt: booking.createdAt,
+      // 已结束的预约会自动派生为 COMPLETED，按钮随之消失——
+      // 用派生状态而不是 status 原值，保证与列表页的判断是同一把尺子
+      canCancel: canCancelBooking(booking),
+      canceling: false,
+      cancelError: '',
     })
+  },
+
+  /**
+   * 点击「取消预约」：先二次确认（见文件头设计判断 5）。
+   * 确认框由系统渲染，用户点「取消」时什么都不做——记录保持原状，也不发请求。
+   */
+  onCancel() {
+    if (this.data.canceling || !this.data.canCancel) {
+      return
+    }
+
+    wx.showModal({
+      title: '取消预约',
+      content: '取消后该时间段将释放给其他同学，确定要取消吗？',
+      confirmText: '确定取消',
+      cancelText: '再想想',
+      success: (res) => {
+        if (res.confirm) {
+          this.performCancel()
+        }
+      },
+    })
+  },
+
+  /** 真正发起取消请求 */
+  async performCancel() {
+    if (this.data.canceling) {
+      return
+    }
+
+    this.setData({ canceling: true, cancelError: '' })
+
+    try {
+      const updated = await cancelBooking(this.data.bookingId)
+      // 服务端返回空（DELETE 的常见实现）时重新拉一次，保证看到的是真实状态
+      if (updated) {
+        this.renderBooking(updated)
+      } else {
+        await this.loadDetail()
+      }
+      wx.showToast({ title: '已取消', icon: 'none' })
+    } catch (error) {
+      this.afterCancelFailure(error)
+    } finally {
+      this.setData({ canceling: false })
+    }
+  },
+
+  /** 取消失败：按错误码分流，只有网络类值得原样重试 */
+  afterCancelFailure(error: unknown) {
+    const apiError = error instanceof ApiError ? error : null
+    const code = apiError ? apiError.code : 0
+    const message = apiError ? apiError.message : FALLBACK_CANCEL_ERROR
+
+    if (RETRYABLE_CODES.indexOf(code) >= 0) {
+      this.setData({ cancelError: message })
+      return
+    }
+
+    // 查不到该预约（含「不属于当前用户」）：与详情加载失败同一处理，落到 empty 态
+    if (code === BOOKING_ERROR_CODE.NOT_FOUND) {
+      wx.showToast({ title: message, icon: 'none' })
+      this.setData({ pageState: 'empty' })
+      return
+    }
+
+    // 状态冲突（已取消 / 已结束）：页面上的数据已经过期，重新拉详情把它刷成真实状态
+    if (code === BOOKING_ERROR_CODE.CONFLICT) {
+      wx.showToast({ title: message, icon: 'none' })
+      this.loadDetail()
+      return
+    }
+
+    // 登录态失效：只提示。清态与引导登录由「我的预约」页负责（见文件头设计判断 3）
+    wx.showToast({ title: message, icon: 'none' })
   },
 
   /** error-state 的重试事件 */

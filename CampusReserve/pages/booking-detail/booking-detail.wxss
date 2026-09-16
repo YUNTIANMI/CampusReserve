@@ -25,3 +25,25 @@
   color: var(--cr-color-text-muted);
   background-color: var(--cr-color-bg);
 }
+
+/* 取消预约：与「返回我的预约」并排，视觉上要明显比它更「重」 */
+.action {
+  margin-bottom: var(--cr-space-md);
+  width: 100%;
+  border: 1rpx solid var(--cr-color-danger);
+}
+
+.action--danger {
+  color: var(--cr-color-danger);
+  background-color: transparent;
+}
+
+/* 取消失败的原因：与提交失败同一形态，红色底条 */
+.cancel__error {
+  margin-top: var(--cr-space-md);
+  padding: var(--cr-space-sm) var(--cr-space-md);
+  font-size: var(--cr-font-sm);
+  color: var(--cr-color-danger);
+  background-color: rgba(245, 34, 45, 0.06);
+  border-radius: var(--cr-radius-sm);
+}

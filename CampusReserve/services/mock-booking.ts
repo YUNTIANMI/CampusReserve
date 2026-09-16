@@ -24,13 +24,23 @@
  * 端到端测试在每次运行开始时用 `resetMockBookings()` 拿到干净状态。
  */
 import { getToken } from '../store/auth'
-import { BOOKING_ERROR_CODE, validateBookingPayload } from '../utils/booking'
+import {
+  BOOKING_ERROR_CODE,
+  resolveBookingStatus,
+  validateBookingPayload,
+} from '../utils/booking'
 import { formatDateTime } from '../utils/date'
 import {
   MOCK_BOOKING_MODE_STORAGE_KEY,
+  MOCK_CANCEL_MODE_STORAGE_KEY,
   MOCK_MY_BOOKINGS_MODE_STORAGE_KEY,
 } from './config'
-import { appendMockBooking, isSlotBooked, listMockBookings } from './mock-booking-store'
+import {
+  appendMockBooking,
+  isSlotBooked,
+  listMockBookings,
+  updateMockBookingStatus,
+} from './mock-booking-store'
 import { buildDefaultSlots, MOCK_RESOURCES } from './mock-resource'
 import { ApiError, ApiErrorCode } from './request'
 import type { Booking, CreateBookingPayload } from '../types/booking'
@@ -49,6 +59,9 @@ const MOCK_BOOKING_DELAY = 600
 
 /** 列表请求的模拟延迟（毫秒），比提交略短，用于观察加载态 */
 const MOCK_MY_BOOKINGS_DELAY = 500
+
+/** 取消请求的模拟延迟（毫秒），用于观察「取消中…」态 */
+const MOCK_CANCEL_DELAY = 600
 
 /** 开发期创建预约的数据源模式 */
 export type MockBookingMode =
@@ -236,5 +249,100 @@ export function mockGetMyBookings(): Promise<Booking[]> {
 
       resolve(mode === 'empty' ? [] : listMockBookings())
     }, MOCK_MY_BOOKINGS_DELAY)
+  })
+}
+
+/** 开发期取消预约的数据源模式 */
+export type MockCancelMode = 'success' | 'not-found' | 'conflict' | 'unauthorized' | 'error'
+
+/** 各失败模式对应的错误；缺省（success）时走真实校验 */
+const CANCEL_FORCED_ERRORS: Record<string, { code: number; message: string }> = {
+  'not-found': {
+    code: BOOKING_ERROR_CODE.NOT_FOUND,
+    message: '未找到该预约，或它不属于当前用户',
+  },
+  conflict: { code: BOOKING_ERROR_CODE.CONFLICT, message: '该预约已结束或已取消，无需重复操作' },
+}
+
+/**
+ * 读取当前取消预约的数据源模式。
+ * 通过 `wx.setStorageSync('CR_MOCK_CANCEL_MODE', 'not-found')` 可在调试与端到端测试中注入。
+ */
+export function readMockCancelMode(): MockCancelMode {
+  const raw: unknown = wx.getStorageSync(MOCK_CANCEL_MODE_STORAGE_KEY)
+  const modes: MockCancelMode[] = ['not-found', 'conflict', 'unauthorized', 'error']
+  return modes.indexOf(raw as MockCancelMode) >= 0 ? (raw as MockCancelMode) : 'success'
+}
+
+/**
+ * 取消预约。
+ *
+ * 对应 `DELETE /api/bookings/{id}`（技术设计 §3）。与创建同理，**入参里没有 userId**：
+ * 用户身份由服务端从请求凭证解析，因此「不得取消其他用户预约」（需求 §4.7、
+ * 技术设计 §11 第 6 条）落点是——**在本人名下的记录里查**。查不到就是「不存在或无权访问」，
+ * 与创建预约时「前端过滤是假的安全、真正的边界在服务端」是同一条原则。
+ *
+ * 为什么还要校验状态：需求 §4.7 说可取消的是「有效预约」。
+ * 已取消的重复取消、时段已过的取消都没有意义，服务端这一关才是权威——
+ * 客户端的 `canCancelBooking` 只是让按钮不出错，绕过去直接调接口也拦得住。
+ *
+ * 返回更新后的记录：调用方据此立即刷新展示，不必再多发一次查询请求。
+ *
+ * @throws {ApiError} 参数非法 / 预约不存在或不属于当前用户 / 状态不可取消 /
+ *                    登录态失效 / 网络异常
+ */
+export function mockCancelBooking(bookingId: number): Promise<Booking | null> {
+  const mode = readMockCancelMode()
+
+  return new Promise<Booking | null>((resolve, reject) => {
+    setTimeout(() => {
+      if (mode === 'error') {
+        reject(new ApiError(ApiErrorCode.NETWORK, '网络连接失败，请检查网络后重试'))
+        return
+      }
+
+      if (mode === 'unauthorized') {
+        reject(new ApiError(ApiErrorCode.UNAUTHORIZED, '登录状态已失效，请重新登录'))
+        return
+      }
+
+      const forced = CANCEL_FORCED_ERRORS[mode]
+      if (forced) {
+        reject(new ApiError(forced.code, forced.message))
+        return
+      }
+
+      // ---- 以下为 success 模式下的真实校验 ----
+
+      // 1. ID 必须是正整数
+      if (!Number.isInteger(bookingId) || bookingId <= 0) {
+        reject(new ApiError(BOOKING_ERROR_CODE.PARAM, '预约信息有误，请返回重试'))
+        return
+      }
+
+      // 2. 预约存在且属于当前用户（/my 只返回本人数据，查不到即等于无权取消）
+      const target = listMockBookings().find((item) => item.id === bookingId)
+      if (!target) {
+        reject(new ApiError(BOOKING_ERROR_CODE.NOT_FOUND, '未找到该预约，或它不属于当前用户'))
+        return
+      }
+
+      // 3. 状态仍可取消：已取消 / 已过时的都不接受（与 utils/booking.ts 同一把尺子）
+      if (resolveBookingStatus(target) !== 'PENDING') {
+        reject(
+          new ApiError(
+            BOOKING_ERROR_CODE.CONFLICT,
+            target.status === 'CANCELLED'
+              ? '该预约已取消，无需重复操作'
+              : '该预约已结束，无需取消',
+          ),
+        )
+        return
+      }
+
+      // 写入：状态改为 CANCELLED。此后 isSlotBooked / overlayBookedSlots 都不再算它占用，
+      // 即需求 §4.7「取消后时间段恢复可用」——不需要任何额外的清理动作。
+      resolve(updateMockBookingStatus(bookingId, 'CANCELLED'))
+    }, MOCK_CANCEL_DELAY)
   })
 }

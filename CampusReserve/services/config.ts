@@ -105,3 +105,21 @@ export const MOCK_BOOKING_MODE_STORAGE_KEY = 'CR_MOCK_BOOKING_MODE'
  * 注意：该键只影响 `GET /api/bookings/my`；预约详情复用的也是这个接口，因此同样受影响。
  */
 export const MOCK_MY_BOOKINGS_MODE_STORAGE_KEY = 'CR_MOCK_MY_BOOKINGS_MODE'
+
+/**
+ * 开发期「取消预约」数据源模式存储键（Phase 8 追加）。
+ *
+ * 取值与含义：
+ * - `success`：默认，走完整的真实校验（ID 合法 / 预约存在 / 状态仍可取消），
+ *   校验通过才把该条记录改为 `CANCELLED`
+ * - `not-found`：强制返回「预约不存在或不属于当前用户」（`404001`），
+ *   用于验证客户端无法构造的「归属校验失败」路径——需求 §4.7「不得取消其他用户预约」
+ * - `conflict`：强制返回「该预约已结束或已取消」（`409001`），用于验证重复取消的提示
+ * - `unauthorized`：强制返回「登录状态已失效」（HTTP 401）
+ * - `error`：请求失败（网络异常），用于验证「取消失败后可原样重试」
+ *
+ * 为什么又一个键：`DELETE /api/bookings/{id}` 与「创建」「查询」是三个不同接口，
+ * 端到端测试要能表达「列表正常但取消失败」「取消成功但列表刷新失败」这类组合，
+ * 共用一个键就做不到了。这与前面五个键刻意分开是同一条原则。
+ */
+export const MOCK_CANCEL_MODE_STORAGE_KEY = 'CR_MOCK_CANCEL_MODE'

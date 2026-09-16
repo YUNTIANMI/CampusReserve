@@ -16,6 +16,8 @@
  *
  * Phase 7 追加状态派生：把「预约时段是否已结束」折算成展示用的状态，
  * 让「我的预约」三个页签（需求 §4.6）能正确分組。
+ * Phase 8 追加 `canCancelBooking`：需求 §4.7「用户可以取消自己的**有效**预约」，
+ * 哪些算有效由这里统一判定，页面不各自写一遍时间比较。
  */
 import { parseDate, toMinutes } from './date'
 import type { Booking, BookingStatus, CreateBookingPayload } from '../types/booking'
@@ -207,4 +209,23 @@ export function selectBookingsByStatus(
   const matched = list.filter((item) => resolveBookingStatus(item, now) === status)
   const sorted = matched.slice().sort(compareChronologically)
   return status === 'PENDING' ? sorted : sorted.reverse()
+}
+
+/**
+ * 这条预约此刻是否还允许取消（需求 §4.7、技术设计 §11 第 6 条）。
+ *
+ * 判据是**派生状态**而不是 `booking.status` 原值：
+ * 一条 `PENDING` 但时段早已过去的预约，取消它没有任何意义——
+ * 场地早就空出来了，用户也不需要它「恢复可用」。
+ * 这里复用 `resolveBookingStatus` 而不是再写一遍时间比较，
+ * 是为了让「列表里显示已完成」与「详情页不显示取消按钮」永远用同一把尺子，
+ * 不会出现「这一页说已结束、那一页还能取消」的自相矛盾。
+ *
+ * 「不得取消其他用户预约」不在这里判定：那是服务端按登录凭证做的归属校验
+ * （技术设计 §11 第 6 条），客户端无从也不该自己判断归属。
+ *
+ * @param now 比较基准，缺省为当前时刻；测试可注入固定值
+ */
+export function canCancelBooking(booking: Booking, now: Date = new Date()): boolean {
+  return resolveBookingStatus(booking, now) === 'PENDING'
 }

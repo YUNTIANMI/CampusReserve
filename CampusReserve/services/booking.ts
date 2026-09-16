@@ -8,12 +8,12 @@
  * 后端业务 API 属于 Phase 10，在此之前切到开发期本地数据源，调用方无感知。
  *
  * Phase 6 实现「创建预约」；Phase 7 追加「我的预约」（GET /api/bookings/my）
- * 与「预约详情」；「取消预约」（DELETE /api/bookings/{id}）属于 Phase 8。
+ * 与「预约详情」；Phase 8 追加「取消预约」（DELETE /api/bookings/{id}）。
  */
 import { getToken } from '../store/auth'
 import { BOOKING_ERROR_CODE } from '../utils/booking'
 import { USE_MOCK_DATA } from './config'
-import { mockCreateBooking, mockGetMyBookings } from './mock-booking'
+import { mockCancelBooking, mockCreateBooking, mockGetMyBookings } from './mock-booking'
 import { ApiError, request } from './request'
 import type { Booking, CreateBookingPayload } from '../types/booking'
 
@@ -101,5 +101,34 @@ export function getBookingDetail(bookingId: number): Promise<Booking> {
       throw new ApiError(BOOKING_ERROR_CODE.NOT_FOUND, '未找到该预约，或它不属于当前用户')
     }
     return found
+  })
+}
+
+/**
+ * 取消预约。
+ *
+ * 对应 `DELETE /api/bookings/{id}`（技术设计 §3）。与创建、查询同理，入参里没有 userId：
+ * 服务端从凭证解析用户，并在**本人名下的记录**里按 id 查找——查不到即等于
+ * 「不存在或不属于当前用户」，需求 §4.7 与技术设计 §11 第 6 条「不得取消其他用户预约」
+ * 因此不需要前端做任何归属判断。
+ *
+ * 为什么返回 `Booking | null` 而不是 `void`：
+ * 取消成功后页面要立刻把状态标签改成「已取消」、并让取消按钮消失，
+ * 有返回值就省掉一次重新查询。若服务端只回了空（`DELETE` 常这么设计），
+ * 调用方退回重新拉一次详情即可，两种实现都不用改调用方以外的代码。
+ *
+ * @throws {ApiError} 预约不存在或不属于当前用户（`404001`）、
+ *                    状态已不允许取消（`409001`）、登录态失效、网络异常
+ */
+export function cancelBooking(bookingId: number): Promise<Booking | null> {
+  if (USE_MOCK_DATA) {
+    return mockCancelBooking(bookingId)
+  }
+
+  const token = getToken()
+  return request<Booking | null>({
+    url: `/bookings/${bookingId}`,
+    method: 'DELETE',
+    header: token ? { Authorization: `Bearer ${token}` } : {},
   })
 }
