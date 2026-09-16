@@ -31,7 +31,7 @@ export const ENABLE_REQUEST_LOG = true
  *
  * 该开关只决定数据来源，不改变任何页面逻辑。
  */
-export const USE_MOCK_DATA = true
+export const USE_MOCK_DATA = false
 
 /**
  * 开发期数据源模式存储键，取值 'success' | 'empty' | 'error'。
