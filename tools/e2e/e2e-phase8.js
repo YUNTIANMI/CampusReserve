@@ -522,16 +522,25 @@ async function callCancel(mp) {
   })
 }
 
+/**
+ * 连点两次「取消预约」，读回页面此刻的防重复标记。
+ *
+ * 同时返回 `confirming` 与 `canceling`：Phase 9 把二次确认 Promise 化之后，
+ * 「防重复」的职责落在两个阶段上 —— 先「等待确认」（`confirming`），再「请求中」（`canceling`）。
+ * 连点时第二个调用会被**当时所在阶段**的标记拦住，但具体是哪一个随实现而变。
+ * 因此这里两个都返回，由用例断言「进入了防重复状态」而不是「某个字段等于 true」，
+ * 免得实现一调整就误报（断言具体字段会绑死实现细节）。
+ */
 async function callCancelTwice(mp) {
   return mp.evaluate(() => {
     const pages = getCurrentPages()
     const current = pages[pages.length - 1]
     if (!current || typeof current.onCancel !== 'function') {
-      return { canceling: false, skipped: true }
+      return { canceling: false, confirming: false, skipped: true }
     }
     current.onCancel()
     current.onCancel()
-    return { canceling: current.data.canceling }
+    return { canceling: !!current.data.canceling, confirming: !!current.data.confirming }
   })
 }
 
@@ -1053,7 +1062,13 @@ function firstAvailableStartTime(detailData) {
     await resetFeedbackSpy(mp)
     await setSpyMode(mp, 'confirm')
     const twice = await callCancelTwice(mp)
-    check('连续两次触发取消时处于「取消中」态', !!twice && twice.canceling === true, JSON.stringify(twice))
+    // 断言「进入了防重复状态」而不是某个具体字段：Phase 9 之后连点被拦在「等待确认」阶段，
+    // 此刻 `canceling` 尚未置位。真正的保护效果由下面三条（只弹一次框 / 只提示一次 / 只有一条记录）保证
+    check(
+      '连续两次触发取消时进入防重复状态',
+      !!twice && (twice.confirming === true || twice.canceling === true),
+      JSON.stringify(twice),
+    )
 
     await waitForPageData(mp, BOOKING_DETAIL, (d) => d.statusLabel === '已取消', 12000)
     spy = await readFeedbackSpy(mp)

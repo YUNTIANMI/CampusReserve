@@ -34,16 +34,18 @@ node ./e2e-phase5.js ws://127.0.0.1:9420   # Phase 5：登录入口、一键登�
 node ./e2e-phase6.js ws://127.0.0.1:9420   # Phase 6：创建预约、成功提示与跳转、冲突与各类失败
 node ./e2e-phase7.js ws://127.0.0.1:9420   # Phase 7：我的预约、状态派生与分组、BookingCard、预约详情
 node ./e2e-phase8.js ws://127.0.0.1:9420   # Phase 8：取消预约、二次确认、状态更新、时间段恢复、失败分流
+node ./e2e-phase9.js ws://127.0.0.1:9420   # Phase 9：统一反馈层、筛选条件缓存、下拉刷新与安全区适配
 ```
 
-也可以用 npm 脚本：`npm run auto` / `npm run phase1` … `npm run phase8`。
+也可以用 npm 脚本：`npm run auto` / `npm run phase1` … `npm run phase9`。
 
 `start-automation.js` 会自动定位开发者工具 CLI（可用命令行参数或 `WX_DEVTOOLS_CLI` 环境变量覆盖），
 并把工程根指向 `../../CampusReserve`。
 
 退出码 `0` 表示全部通过，输出末行为 `E2E_TEST = PASS`。
 当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`，Phase 3 `65/65`，Phase 4 `81/81`，
-Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，Phase 8 `73/73`，合计 `490` 项断言。
+Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，Phase 8 `73/73`，Phase 9 `69/69`，
+合计 `559` 项断言。
 
 > Phase 1 的脚本自 Phase 3 起会先清除 `CR_MOCK_MODE`：`resource-list` 已接入真实数据源，
 > 不固定数据源模式就无法确定性断言。Phase 1 脚本对该页只覆盖「Phase 1 交付物」
@@ -263,3 +265,37 @@ Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，Phase 8 `73/73`，合计 `
     `Uncaught ...` 的形式**抛到连接层**，直接中断整轮测试、后续用例全部不执行。
     一行 `if (typeof current.onXxx !== 'function') return {...}` 就能把
     「一个前置失败」限制成「一条断言失败」。
+
+34. **「存了空串」与「没存过」在 `wx.getStorageSync` 下无法区分。**（Phase 9 实测，误报 1 项）
+    筛选缓存里「全部」这一项本身就是空串，而 `getStorageSync` 对「键不存在」也返回空串，
+    于是「确实存过『全部』」被误判成「没存过」，断言 `=== null` 必然失败。
+    判「键是否存在」要用 `wx.getStorageInfoSync().keys.indexOf(key) >= 0`，再配合取值区分
+    三种语义：`null` = 没存过、`''` = 存的是「全部」、其余 = 具体分类。
+    **产品代码不需要这么做**：`store/preference.ts` 里「存了空串」与「没存过」语义一致
+    （都表示「全部」），刻意不区分；只有测试侧要判「这次到底写没写」才必须分得清。
+
+35. **统一反馈层的断言要连「形态」一起验，不能只验「弹了没有」。**（Phase 9）
+    探针得记录完整参数：modal 的 `title` / `content` / `confirmText` / `cancelText` /
+    `confirmColor`，toast 的 `icon` / `duration`。危险操作（取消预约）的确认按钮色、
+    toast 的 2000ms 停留时长都是被断言的一部分——只记「调过 `showModal`」这些就验不了。
+    见 `e2e-phase9.js` 的 `installFeedbackSpy()`。
+
+36. **`confirm()` 的 `fail` 分支要单独测。**（Phase 9）
+    弹窗弹不出来（`showModal:fail`）时既不能卡在「等待确认」状态、也不能当作用户点了确认，
+    而应返回「未确认」（安全方向）并静默结束。探针加一个 `mode='fail'` 主动调
+    `options.fail()` 即可覆盖。
+
+37. **下拉刷新的「动画收起」可用 `wx.stopPullDownRefresh` 计数验。**（Phase 9）
+    `onPullDownRefresh` 触发后必须调到 `wx.stopPullDownRefresh`，否则刷新圈一直转。
+    让探针接管它并累计 `stopPullDownCalls` 就能直接断言，不必去读渲染层。
+    **失败 / 未登录等异常路径同样要收起动画**——这是最容易漏的一条。
+
+38. **产品代码的「机制」一变，回归就会暴露那些盯着机制细节的旧断言。**（Phase 9 实测）
+    Phase 9 把二次确认 Promise 化后，预约详情页的防重复从「请求中」（`canceling`）
+    前移到了「等待确认」（`confirming`）。`e2e-phase8.js` 里那条
+    「连点两次时 `canceling === true`」立刻失败——但真正的保护（只弹一次确认框、
+    只提示一次、只落一条记录）三条断言全过。
+    **修法是改断言而不是改产品代码**：把它改成「进入了防重复状态」
+    （`confirming === true || canceling === true`）。
+    断言实现细节会绑死重构空间；断言用户可见的结论（次数、条数）才稳定。
+    这类失败是回归测试的正常收获，先分清「产品坏了」还是「断言过期了」再动手。
