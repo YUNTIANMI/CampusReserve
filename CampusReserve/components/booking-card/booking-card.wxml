@@ -1,0 +1,22 @@
+<view
+  class="booking-card"
+  hover-class="booking-card--hover"
+  hover-stay-time="80"
+  bindtap="handleTap"
+>
+  <view class="booking-card__body">
+    <view class="booking-card__head">
+      <view class="booking-card__name">{{booking.resourceName}}</view>
+      <view class="booking-card__status booking-card__status--{{statusModifier}}">
+        {{statusLabel}}
+      </view>
+    </view>
+
+    <view class="booking-card__time">
+      <text class="booking-card__date">{{dateLabel}}</text>
+      <text class="booking-card__range">{{timeLabel}}</text>
+    </view>
+
+    <view class="booking-card__location">{{booking.location}}</view>
+  </view>
+</view>

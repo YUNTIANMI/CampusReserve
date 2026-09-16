@@ -12,18 +12,25 @@
  * 4. 同一资源同一日期同一开始时间未被重复预约。
  * 这样页面代码写完之后，把 config.ts 的开关改为 false 接真实后端，行为是一致的。
  *
+ * Phase 7 追加 `GET /api/bookings/my` 的本地实现（`mockGetMyBookings`），
+ * 用于「我的预约」列表与预约详情。
+ *
  * 约束：数据形态严格对齐 types/booking.ts 的 `Booking`；
  * 返回 Promise 并带模拟延迟，失败时 reject 与 services/request.ts 同形态的 `ApiError`。
  *
- * 已知边界：预约记录存在 services/mock-booking-store.ts 的模块级内存表里，
- * 小程序冷启动（含开发者工具重新编译）即清空。这是刻意选择——开发期不需要跨会话持久化，
- * 真实持久化由 Phase 10 的数据库承担；端到端测试因此可以在每次运行开始时
- * 用 `resetMockBookings()` 拿到干净状态。
+ * 已知边界：预约记录在 services/mock-booking-store.ts，落在本地缓存键 `CR_MOCK_BOOKINGS`
+ * （不是模块级变量——那样每次重新编译就清空，Phase 7 的列表会读不到刚创建的预约）。
+ * 开发期不需要真正的跨会话持久化，真实持久化由 Phase 10 的数据库承担；
+ * 端到端测试在每次运行开始时用 `resetMockBookings()` 拿到干净状态。
  */
+import { getToken } from '../store/auth'
 import { BOOKING_ERROR_CODE, validateBookingPayload } from '../utils/booking'
 import { formatDateTime } from '../utils/date'
-import { MOCK_BOOKING_MODE_STORAGE_KEY } from './config'
-import { appendMockBooking, isSlotBooked } from './mock-booking-store'
+import {
+  MOCK_BOOKING_MODE_STORAGE_KEY,
+  MOCK_MY_BOOKINGS_MODE_STORAGE_KEY,
+} from './config'
+import { appendMockBooking, isSlotBooked, listMockBookings } from './mock-booking-store'
 import { buildDefaultSlots, MOCK_RESOURCES } from './mock-resource'
 import { ApiError, ApiErrorCode } from './request'
 import type { Booking, CreateBookingPayload } from '../types/booking'
@@ -39,6 +46,9 @@ export { listMockBookings, resetMockBookings } from './mock-booking-store'
 
 /** 模拟网络延迟（毫秒），用于观察「提交中…」态 */
 const MOCK_BOOKING_DELAY = 600
+
+/** 列表请求的模拟延迟（毫秒），比提交略短，用于观察加载态 */
+const MOCK_MY_BOOKINGS_DELAY = 500
 
 /** 开发期创建预约的数据源模式 */
 export type MockBookingMode =
@@ -79,6 +89,19 @@ export function readMockBookingMode(): MockBookingMode {
     'error',
   ]
   return modes.indexOf(raw as MockBookingMode) >= 0 ? (raw as MockBookingMode) : 'success'
+}
+
+/** 开发期「我的预约」数据源模式 */
+export type MockMyBookingsMode = 'success' | 'empty' | 'unauthorized' | 'error'
+
+/**
+ * 读取当前「我的预约」的数据源模式。
+ * 通过 `wx.setStorageSync('CR_MOCK_MY_BOOKINGS_MODE', 'empty')` 可在调试与端到端测试中注入。
+ */
+export function readMockMyBookingsMode(): MockMyBookingsMode {
+  const raw: unknown = wx.getStorageSync(MOCK_MY_BOOKINGS_MODE_STORAGE_KEY)
+  const modes: MockMyBookingsMode[] = ['empty', 'unauthorized', 'error']
+  return modes.indexOf(raw as MockMyBookingsMode) >= 0 ? (raw as MockMyBookingsMode) : 'success'
 }
 
 /** 该资源在该日期该开始时间是否已被预约（已取消的不算占用） */
@@ -174,5 +197,44 @@ export function mockCreateBooking(payload: CreateBookingPayload): Promise<Bookin
         }),
       )
     }, MOCK_BOOKING_DELAY)
+  })
+}
+
+/**
+ * 我的预约列表。
+ *
+ * 对应 `GET /api/bookings/my`（技术设计 §3）。**入参里没有 userId**——
+ * 用户身份由服务端从请求凭证解析，前端能查到谁的预约，完全取决于带了谁的凭证。
+ * 这正是需求 §4.6「用户只能看到自己的预约」的落点：过滤发生在服务端，前端无从伪造。
+ *
+ * 未登录时直接以 `UNAUTHORIZED` 失败而不是返回空列表：
+ * 空列表与「查不到」在页面上是同一副样子，用户会以为自己真的没有预约；
+ * 而 401 能让页面明确地清掉失效的登录态并引导重新登录。
+ *
+ * @throws {ApiError} 登录态失效或网络异常
+ */
+export function mockGetMyBookings(): Promise<Booking[]> {
+  const mode = readMockMyBookingsMode()
+
+  return new Promise<Booking[]>((resolve, reject) => {
+    setTimeout(() => {
+      // 没有凭证时服务端无从判断身份：这与「凭证失效」是同一类结果
+      if (!getToken()) {
+        reject(new ApiError(ApiErrorCode.UNAUTHORIZED, '登录状态已失效，请重新登录'))
+        return
+      }
+
+      if (mode === 'error') {
+        reject(new ApiError(ApiErrorCode.NETWORK, '网络连接失败，请检查网络后重试'))
+        return
+      }
+
+      if (mode === 'unauthorized') {
+        reject(new ApiError(ApiErrorCode.UNAUTHORIZED, '登录状态已失效，请重新登录'))
+        return
+      }
+
+      resolve(mode === 'empty' ? [] : listMockBookings())
+    }, MOCK_MY_BOOKINGS_DELAY)
   })
 }

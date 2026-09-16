@@ -27,17 +27,28 @@
   />
 
   <block wx:else>
-    <empty-state
-      text="{{emptyText}}"
-      description="预约数据尚未接入（Phase 7 实现），当前展示空状态。"
+    <loading-state wx:if="{{pageState === 'loading'}}" />
+
+    <error-state
+      wx:elif="{{pageState === 'error'}}"
+      message="{{errorMessage}}"
+      button-text="重新加载"
+      bind:retry="onRetry"
     />
 
-    <view class="cr-section nav">
-      <view class="cr-section__title">骨架导航</view>
-      <view class="cr-section__desc">用于验证页面路由。</view>
-      <view class="cr-btn cr-btn--primary cr-btn--block" hover-class="cr-hover" bindtap="onOpenDetail">
-        进入预约详情（示例 id={{sampleBookingId}}）
-      </view>
+    <empty-state
+      wx:elif="{{pageState === 'empty'}}"
+      text="{{emptyText}}"
+      description="{{emptyDescription}}"
+    />
+
+    <view class="list" wx:else>
+      <booking-card
+        wx:for="{{list}}"
+        wx:key="id"
+        booking="{{item}}"
+        bind:cardtap="onOpenBooking"
+      />
     </view>
   </block>
 </view>

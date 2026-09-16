@@ -1,6 +1,9 @@
 {
   "usingComponents": {
-    "empty-state": "/components/empty-state/empty-state"
+    "booking-card": "/components/booking-card/booking-card",
+    "empty-state": "/components/empty-state/empty-state",
+    "error-state": "/components/error-state/error-state",
+    "loading-state": "/components/loading-state/loading-state"
   },
   "navigationBarTitleText": "我的预约"
 }

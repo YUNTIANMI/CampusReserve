@@ -20,6 +20,7 @@
   box-shadow: inset 0 -4rpx 0 var(--cr-color-primary);
 }
 
-.nav {
-  margin-top: 48rpx;
+/* 卡片自带下边距，容器只负责把它们归为一组 */
+.list {
+  margin-bottom: var(--cr-space-sm);
 }

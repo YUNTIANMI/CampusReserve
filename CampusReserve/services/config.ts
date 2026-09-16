@@ -87,3 +87,21 @@ export const MOCK_AUTH_MODE_STORAGE_KEY = 'CR_MOCK_AUTH_MODE'
  * 见 services/mock-booking-store.ts（端到端测试会直接清掉它以拿到干净状态）。
  */
 export const MOCK_BOOKING_MODE_STORAGE_KEY = 'CR_MOCK_BOOKING_MODE'
+
+/**
+ * 开发期「我的预约」数据源模式存储键（Phase 7 追加）。
+ *
+ * 取值与含义：
+ * - `success`：默认，返回开发期预约表中的全部记录
+ * - `empty`：返回空列表，用于验证三个页签的空态
+ * - `unauthorized`：模拟登录态失效（HTTP 401），用于验证「清掉登录态并引导重新登录」
+ * - `error`：请求失败（网络异常），用于验证错误态与重试
+ *
+ * 为什么与 `MOCK_BOOKING_MODE_STORAGE_KEY` 分开：两者是不同接口——
+ * 一个管「创建」、一个管「查询」。端到端测试要能表达
+ * 「创建成功但列表拉取失败」「列表正常但提交冲突」这类组合，共用一个键就做不到了。
+ * 这与既有四个键刻意分开是同一条原则。
+ *
+ * 注意：该键只影响 `GET /api/bookings/my`；预约详情复用的也是这个接口，因此同样受影响。
+ */
+export const MOCK_MY_BOOKINGS_MODE_STORAGE_KEY = 'CR_MOCK_MY_BOOKINGS_MODE'

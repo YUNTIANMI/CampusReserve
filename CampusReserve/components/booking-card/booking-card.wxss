@@ -1,0 +1,88 @@
+/* 自定义组件默认样式隔离，仅 CSS 自定义属性可从 page 继承，故此处全部带 var 回退值。 */
+
+.booking-card {
+  padding: var(--cr-space-md, 24rpx);
+  margin-bottom: var(--cr-space-sm, 16rpx);
+  background-color: var(--cr-color-surface, #ffffff);
+  border-radius: var(--cr-radius-md, 16rpx);
+}
+
+.booking-card:last-child {
+  margin-bottom: 0;
+}
+
+.booking-card--hover {
+  background-color: var(--cr-color-hover, #f2f3f5);
+}
+
+.booking-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.booking-card__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--cr-font-md, 28rpx);
+  font-weight: 600;
+  color: var(--cr-color-text, #1f2329);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.booking-card__status {
+  flex: none;
+  height: 40rpx;
+  margin-left: var(--cr-space-sm, 16rpx);
+  padding: 0 var(--cr-space-sm, 16rpx);
+  font-size: var(--cr-font-xs, 22rpx);
+  line-height: 40rpx;
+  border-radius: 6rpx;
+}
+
+/* 待使用：主色，是还需要用户去做点什么的状态 */
+.booking-card__status--pending {
+  color: var(--cr-color-primary, #2f6bff);
+  background-color: rgba(47, 107, 255, 0.08);
+}
+
+/* 已完成：中性灰，无需强调 */
+.booking-card__status--completed {
+  color: var(--cr-color-text-secondary, #646a73);
+  background-color: var(--cr-color-bg, #f5f6f8);
+}
+
+/* 已取消：弱化并加删除线的观感（用透明度表达，WXML 不再加额外节点） */
+.booking-card__status--cancelled {
+  color: var(--cr-color-text-muted, #8f959e);
+  background-color: var(--cr-color-bg, #f5f6f8);
+}
+
+.booking-card__time {
+  display: flex;
+  align-items: baseline;
+  margin-top: 12rpx;
+}
+
+.booking-card__date {
+  font-size: var(--cr-font-sm, 26rpx);
+  color: var(--cr-color-text-secondary, #646a73);
+}
+
+.booking-card__range {
+  margin-left: var(--cr-space-sm, 16rpx);
+  font-size: var(--cr-font-md, 28rpx);
+  font-weight: 600;
+  color: var(--cr-color-text, #1f2329);
+}
+
+.booking-card__location {
+  margin-top: 12rpx;
+  overflow: hidden;
+  font-size: var(--cr-font-sm, 26rpx);
+  color: var(--cr-color-text-muted, #8f959e);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

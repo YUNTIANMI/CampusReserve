@@ -1,6 +1,8 @@
 {
   "usingComponents": {
-    "error-state": "/components/error-state/error-state"
+    "empty-state": "/components/empty-state/empty-state",
+    "error-state": "/components/error-state/error-state",
+    "loading-state": "/components/loading-state/loading-state"
   },
   "navigationBarTitleText": "预约详情"
 }
