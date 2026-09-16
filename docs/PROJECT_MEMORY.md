@@ -21,11 +21,11 @@
 
 ## 2. Current Phase
 
-当前阶段：Phase 7 - 我的预约（已完成，E2E 实测 63/63 通过）
+当前阶段：Phase 8 - 取消预约（已完成，E2E 实测 73/73 通过）
 
 当前任务：无
 
-下一阶段：Phase 8 - 取消预约
+下一阶段：Phase 9 - 小程序体验优化
 
 ## 3. Completed
 
@@ -137,16 +137,32 @@ Phase 7（我的预约）：
 - [x] 回归测试：Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、Phase 4 81/81、
   Phase 5 64/64、Phase 6 61/61 通过（七套合计 **417** 项）
 
+Phase 8（取消预约）：
+- [x] `DELETE /api/bookings/{id}`：`services/booking.ts` 的 `cancelBooking(id)`
+  （Phase 10 接真实后端，本阶段由 `mockCancelBooking()` 顶替）
+- [x] 取消确认：`wx.showModal` 二次确认，点「再想想」时什么都不发生（不发请求）
+- [x] 状态更新：记录落 `CANCELLED`；成功后停在详情页并把状态标签刷成「已取消」、按钮消失
+- [x] 时间段恢复可用：`isSlotBooked()` / `overlayBookedSlots()` 本就把 `CANCELLED`
+  排除在占用之外，无需额外清理；E2E 用「预约后 BOOKED → 取消后 AVAILABLE」验证
+- [x] 返回页面刷新：我的预约 `onShow` 每次重新拉取，取消后返回即刷新，不新增刷新标记
+- [x] 取消按钮的出现条件由 `utils/booking.ts` 的 `canCancelBooking()` 判定（派生状态），
+  已完成 / 已取消的预约不渲染按钮；服务端另有状态校验，绕开 UI 也拦得住
+- [x] 失败分流：网络异常保留按钮并留下原因（可重试）；查不到落到 empty 态；
+  状态冲突重新拉详情；登录态失效只提示（清态与引导交给我的预约页）
+- [x] 静态检查：`tsc --noEmit` 0 错误
+- [x] 端到端测试：真实开发者工具中 73/73 通过（`tools/e2e/e2e-phase8.js`）
+- [x] 回归测试：Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、Phase 4 81/81、
+  Phase 5 64/64、Phase 6 61/61、Phase 7 63/63 通过（八套合计 **490** 项）
+
 ## 4. In Progress
 
 暂无。
 
 ## 5. Next Tasks
 
-1. Phase 8：`DELETE /api/bookings/{id}` 与 `services/booking.ts` 的 `cancelBooking(id)`
-2. Phase 8：取消二次确认、状态更新为 `CANCELLED`、时间段恢复可用（`overlayBookedSlots`
-   已按「已取消不算占用」实现，见 `mock-booking-store.ts`）
-3. Phase 8：返回页面刷新（我的预约 `onShow` 已每次重新拉取，详情页需补 `onShow` 刷新）
+1. Phase 9：加载体验优化（骨架屏 / 按钮防抖 / 空态与错误态文案打磨）
+2. Phase 9：空状态与异常路径的统一呈现，以及交互细节（下拉刷新、触底加载）
+3. Phase 9：整体视觉与文案复核（技术设计 §8 的交互要求）
 
 ## 6. Current Frontend State
 
@@ -174,8 +190,8 @@ AppID：`wxb97024eb0305368d`
 服务（`services/`）：
 - `config.ts`：API 根地址、超时常量，以及开发期数据源开关 `USE_MOCK_DATA` 与模式存储键
   （Phase 4 追加 `MOCK_AVAIL_MODE_STORAGE_KEY`、Phase 5 追加 `MOCK_AUTH_MODE_STORAGE_KEY`、
-  Phase 6 追加 `MOCK_BOOKING_MODE_STORAGE_KEY`、Phase 7 追加 `MOCK_MY_BOOKINGS_MODE_STORAGE_KEY`，
-  五个键刻意分开，理由见 §11）
+  Phase 6 追加 `MOCK_BOOKING_MODE_STORAGE_KEY`、Phase 7 追加 `MOCK_MY_BOOKINGS_MODE_STORAGE_KEY`、
+  Phase 8 追加 `MOCK_CANCEL_MODE_STORAGE_KEY`，六个键刻意分开，理由见 §11）
 - `request.ts`：封装 `wx.request`，统一归一化为 `ApiError`（区分网络失败 / 超时 / HTTP 非 2xx / 业务 code ≠ 0）
 - `resource.ts`（Phase 2 / Phase 4）：资源业务接口
   - `getResources(query)`（Phase 2）
@@ -206,9 +222,13 @@ AppID：`wxb97024eb0305368d`
     返回**全量状态**的原始列表，排序与分组交给页面
   - `getBookingDetail(id)`（Phase 7）：复用 `getMyBookings()` 再按 id 查找，
     查不到抛 `ApiError(404001)`。不新增 `GET /api/bookings/{id}`，理由见 §10 第 10 条
+  - `cancelBooking(id)`（Phase 8）→ `DELETE /api/bookings/{id}`。**入参只有 id**：
+    服务端从凭证解析用户并在本人名下的记录里查找，查不到即等于「不存在或无权访问」，
+    需求 §4.7 与技术设计 §11 第 6 条「不得取消其他用户预约」不需要前端判断归属。
+    返回 `Booking | null`——有返回值时页面可立即刷新展示，为空时退回重新拉详情
   - 本层是纯传输层、不做校验：客户端预校验由页面调用 `utils/booking.ts` 完成，
     服务端返回的 `ApiError.code` 原样交给调用方分流
-- `mock-booking.ts`（Phase 6 创建，Phase 7 追加查询）：开发期预约数据源
+- `mock-booking.ts`（Phase 6 创建，Phase 7 追加查询，Phase 8 追加取消）：开发期预约数据源
   - `mockCreateBooking(payload)`：延迟 600ms；`CR_MOCK_BOOKING_MODE` 可注入
     `conflict` / `resource-missing` / `invalid-time` / `param-error` / `unauthorized` / `error`，
     缺省 `success` 走完整真实校验（参数 → 资源存在 → 时段在开放范围且仍可预约 → 未重复预约）
@@ -217,12 +237,17 @@ AppID：`wxb97024eb0305368d`
     空列表与「查不到」在页面上是同一副样子，用户会以为自己真的没有预约
   - 交付物不只是「造一条假数据」，而是把**服务端该做的校验**先按技术设计 §11 实现一遍，
     使页面代码写完后把开关改为 `false` 接真实后端时行为一致
+  - `mockCancelBooking(id)`（Phase 8）：延迟 600ms；`CR_MOCK_CANCEL_MODE` 可注入
+    `not-found` / `conflict` / `unauthorized` / `error`。缺省 `success` 走完整真实校验
+    （ID 合法 → 在本人记录里查得到 → 派生状态仍是 `PENDING`），通过后只把 `status` 改为
+    `CANCELLED`，其余字段原样保留
   - 转出开发期预约表的读/清接口（实现见 `mock-booking-store.ts`），供 Phase 7 取用
 - `mock-booking-store.ts`（Phase 6）：开发期预约表，唯一需要跨数据源共享的可变状态
   - 落在缓存键 `CR_MOCK_BOOKINGS`（而非模块级变量）：模块级变量在开发者工具每次重新编译时清空，
     Phase 7 的「我的预约」需要它稳定可读，E2E 也需要能直接清空它
   - `resetMockBookings()` / `listMockBookings()` / `appendMockBooking()` / `isSlotBooked()` /
-    `overlayBookedSlots()`
+    `overlayBookedSlots()` / `updateMockBookingStatus()`（Phase 8，只改 `status`，
+    预约编号与创建时间必须与原来一致，否则用户看到的就是另一条数据了）
   - 之所以单独成模块：可用时间段与创建预约都要读它，放在任一侧都会造成循环依赖
 
 登录态（`store/auth.ts`，Phase 5 新增）：
@@ -256,6 +281,9 @@ AppID：`wxb97024eb0305368d`
     **只派生、不写回**——让 `GET` 产生写副作用不干净，真实后端自行推进也不冲突
   - `selectBookingsByStatus(list, status, now?)`（Phase 7）：筛选 + 排序。
     待使用升序、已完成 / 已取消降序
+  - `canCancelBooking(booking, now?)`（Phase 8）：这条预约此刻是否还允许取消。
+    判据复用 `resolveBookingStatus()` 而非 `status` 原值——列表与详情页因此永远同尺，
+    不会出现「列表说已结束、详情还能取消」。归属校验不在这里做（那是服务端的事）
   - 错误码为什么放在 utils：开发期数据源与真实接口层都要用它，放在任一侧都会形成循环依赖；
     本文件不 import 任何 services，依赖方向始终单向
 
@@ -306,11 +334,22 @@ AppID：`wxb97024eb0305368d`
      这一页是「我接下来要做什么」的入口，显示过期数据比多等半秒严重；
   5. **登录态失效时清掉本地登录态并引导重新登录**（与详情页提交时同一条原则）。
   三个 `.tabs__item` 与默认 `emptyText` 保持不变（Phase 1 测试依赖）
-- `pages/booking-detail`（Phase 1 骨架，Phase 7 接入数据）：参数非法 → error 态；
-  查不到该预约 → **empty 态**（请求本身成功了，重试没有意义，不给「重新加载」）；
-  只有网络 / 超时 / HTTP 层故障才落到可重试的 error 态。
+- `pages/booking-detail`（Phase 1 骨架，Phase 7 接入数据，Phase 8 取消预约）：
+  参数非法 → error 态；查不到该预约 → **empty 态**（请求本身成功了，重试没有意义，
+  不给「重新加载」）；只有网络 / 超时 / HTTP 层故障才落到可重试的 error 态。
   数据经 `getBookingDetail(id)` 获得（复用 `/bookings/my`，见 §10 第 10 条）；
-  本页**不处理登录态**——清登录态并引导重新登录由「我的预约」页负责，不在每页重复
+  本页**不处理登录态**——清登录态并引导重新登录由「我的预约」页负责，不在每页重复。
+  Phase 8 的取消预约：
+  1. **取消按钮只在 `canCancelBooking()` 为真时渲染**：需求 §4.7 可取消的是「有效预约」，
+     已完成 / 已取消的预约连按钮都不出现；服务端另有状态校验，绕开 UI 也拦得住；
+  2. **二次确认**：`wx.showModal` 说明「取消后该时间段将释放给其他同学」，
+     点「再想想」时什么都不发生（不发请求）；
+  3. **取消成功后停在本页不自动跳走**：用户需要亲眼看到结果；
+     返回「我的预约」的刷新由它的 `onShow` 自然完成，本阶段不新增刷新标记；
+  4. **取消中防重复**：`canceling` 置灰按钮并显示「取消中…」，第二次触发直接被拦；
+  5. **失败分流**：网络异常保留按钮并把原因留在页面上（可原样重试）；
+     查不到（`404001`）落到 empty 态；状态冲突（`409001`）重新拉详情刷成真实状态；
+     登录态失效只提示
 
 组件：
 - 已创建：`loading-state`、`empty-state`（含操作事件）、`error-state`（含 `retry` 事件）
@@ -386,9 +425,12 @@ cd backend
 - `POST /api/bookings`（Phase 6）
 - `GET /api/bookings/my`（Phase 7；预约详情也复用它，见 §10 第 10 条）
 
-尚未被任何前端代码调用的接口：`DELETE /api/bookings/{id}`（Phase 8）。
+- `DELETE /api/bookings/{id}`（Phase 8）
 
-技术设计 §3 的接口清单里**没有** `GET /api/bookings/{id}`，Phase 7 刻意未扩充契约。
+技术设计 §3 规划的接口至此已**全部被前端调用**，后续阶段不应再新增接口。
+
+技术设计 §3 的接口清单里**没有** `GET /api/bookings/{id}`，Phase 7 刻意未扩充契约
+（预约详情复用 `/bookings/my` 再按 id 查找）。
 
 API 设计以：
 `docs/05_api_contract.md`
@@ -445,7 +487,8 @@ API 设计以：
    - 解析 `page.callMethod()` 调用 async 方法时，其返回的 Promise 无法被序列化；
      需要「触发页面方法并读状态」时，在同一次 `evaluate` 内先调用再读，可稳定捕获瞬时状态。
    - 现成可用的端到端脚本与说明见 `tools/e2e/`（Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、
-     Phase 4 81/81、Phase 5 64/64、Phase 6 61/61、Phase 7 63/63 通过，合计 417 项）。
+     Phase 4 81/81、Phase 5 64/64、Phase 6 61/61、Phase 7 63/63、Phase 8 73/73 通过，
+     合计 490 项）。
 
 6. **模拟器的路由过渡必须先收尾再发下一次导航（Phase 3 实测，极易误判为产品缺陷）**：
    - `wx.navigateTo` / `wx.navigateBack` 的**栈顶路由更新很快，但整段过渡动画约 1.2 秒才
@@ -542,6 +585,23 @@ API 设计以：
       状态推进该由服务端定时任务或下次写入时做；真实后端哪天自行推进了，
       这里的判断（`COMPLETED` 直接沿用）也不会冲突。
 
+12. **取消成功后停在详情页，不自动返回（Phase 8 的刻意取舍）**：
+    - 取消是不可逆的。自动跳走会让人怀疑「到底有没有取消成功」，
+      而停在本页让状态标签变成「已取消」、按钮消失，是用户能亲眼确认的结果。
+    - 「返回页面刷新」因此**不需要新增任何刷新标记**：「我的预约」的 `onShow`
+      本来就每次重新拉取，用户按返回键那一刻刷新自然发生。
+    - 端到端刻意不手动调刷新方法、只走真实返回路径，以保证用户真实路径是通的。
+
+13. **取消失败的「能不能重试」要分开处理（Phase 8）**：
+    - **网络异常**：保留按钮并把原因留在页面上（toast 会消失，而用户正盯着这条记录
+      想知道下一步怎么办），可以原样重试。
+    - **查不到该预约（`404001`）**：落到 empty 态，不给重试——它与「不属于当前用户」
+      在客户端是同一个结果，重试多少次都一样。
+    - **状态冲突（`409001`）**：说明**页面上的数据已经过期**（别人取消了、或时段已过），
+      重试必然失败。正确做法是直接重新拉详情，把页面刷成真实状态。
+    - 这条与 Phase 6「提交失败分流」是同一条原则：只有网络类值得原样重试，
+      业务失败要用「让用户换个做法」来响应。
+
 ## 11. Important Decisions
 
 采用：
@@ -603,9 +663,12 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
     取值 `success`(缺省) / `empty` / `unauthorized` / `error`。
     与上一个键分开是因为两者是**不同接口**——要能表达「创建成功但列表拉取失败」
     「列表正常但提交冲突」这类组合；预约详情共用该接口，因此同样受它影响
-- **五个键刻意分开**：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
+  - `CR_MOCK_CANCEL_MODE`（Phase 8 追加）：作用于 `DELETE /api/bookings/{id}`，
+    取值 `success`(缺省) / `not-found` / `conflict` / `unauthorized` / `error`。
+    同样因为是不同接口——要能表达「列表正常但取消失败」「取消成功但列表刷新失败」
+- **六个键刻意分开**：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
   登录的 `error` 指「登录接口失败」，创建预约的 `conflict` 指「时段已被约走」，
-  我的预约的 `error` 指「列表拉取失败」——
+  我的预约的 `error` 指「列表拉取失败」，取消的 `not-found` 指「预约不存在或不属于本人」——
   一个键表达不了这些组合（例如「详情正常但该日期时段为空」「资源列表正常但登录失败」
   「登录成功但预约时段已被别人约走」「创建成功但列表拉取失败」）。
 - 另有一个数据键（不是模式开关）：`CR_MOCK_BOOKINGS` 存开发期已创建的预约，
@@ -666,12 +729,12 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 ## 14. Last Updated
 
 更新时间：2026-09-16  
-最后完成任务：Phase 6 创建预约完成并通过端到端测试（真实开发者工具中 61/61 通过，
-Phase 1 / Phase 2 / Phase 3 / Phase 4 / Phase 5 回归 36/36、47/47、65/65、81/81、64/64）；
-实现 Booking 数据模型、`POST /api/bookings` 前端接入、详情页真实提交（提交中态 / 成功提示与跳转 /
-按错误码分流的失败提示），客户端预校验与时间合法性校验、三层冲突检查，以及未登录、时间冲突、
-资源不存在、参数错误、非法时间、网络异常、登录态失效七条异常路径；
-新增 `services/booking.ts`、`services/mock-booking.ts`、`services/mock-booking-store.ts`、
-`utils/booking.ts`，并为开发期数据源补齐「可用时间段叠加真实预约」这一自洽性；
-摸清提交失败分流与 E2E 反馈探针的四条实测约束（新增已知问题 9）  
+最后完成任务：Phase 8 取消预约完成并通过端到端测试（真实开发者工具中 73/73 通过，
+Phase 1 ~ Phase 7 回归 36/36、47/47、65/65、81/81、64/64、61/61、63/63，八套合计 490 项）；
+实现 `DELETE /api/bookings/{id}` 前端接入（`cancelBooking` 与 `mockCancelBooking`）、
+`utils/booking.ts` 的 `canCancelBooking()`、预约表的 `updateMockBookingStatus()`、
+预约详情页的二次确认 / 取消中防重复 / 成功后状态更新与按钮消失 / 四类失败分流；
+验证「取消后时间段恢复可用」走真实路径（预约后 BOOKED → 取消后 AVAILABLE），
+并刻意「绕开 UI 直接调 performCancel」证明服务端状态校验是权威；
+新增第六个开发期模式键 `CR_MOCK_CANCEL_MODE`，技术设计 §3 规划的接口至此全部被前端调用  
 更新者：Developer（AI 协同）

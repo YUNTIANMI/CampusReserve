@@ -265,6 +265,7 @@ node ./e2e-phase4.js                # Phase 4：资源详情、日期条、时�
 node ./e2e-phase5.js                # Phase 5：登录入口、一键登录流程、登录态保存、未登录引导
 node ./e2e-phase6.js                # Phase 6：创建预约、成功提示与跳转、冲突与各类失败
 node ./e2e-phase7.js                # Phase 7：我的预约、状态派生与分组、BookingCard、预约详情
+node ./e2e-phase8.js                # Phase 8：取消预约、二次确认、状态更新、时间段恢复、失败分流
 ```
 
 测试脚本编写的硬约束（选择器无法穿透自定义组件、`page.xpath()` 的占位返回与谓词能力、
