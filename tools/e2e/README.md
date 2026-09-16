@@ -32,16 +32,17 @@ node ./e2e-phase3.js ws://127.0.0.1:9420   # Phase 3：列表页、分类筛选�
 node ./e2e-phase4.js ws://127.0.0.1:9420   # Phase 4：资源详情、日期条、时间段三态、选择与按钮状态
 node ./e2e-phase5.js ws://127.0.0.1:9420   # Phase 5：登录入口、一键登录流程、登录态保存、未登录引导
 node ./e2e-phase6.js ws://127.0.0.1:9420   # Phase 6：创建预约、成功提示与跳转、冲突与各类失败
+node ./e2e-phase7.js ws://127.0.0.1:9420   # Phase 7：我的预约、状态派生与分组、BookingCard、预约详情
 ```
 
-也可以用 npm 脚本：`npm run auto` / `npm run phase1` … `npm run phase6`。
+也可以用 npm 脚本：`npm run auto` / `npm run phase1` … `npm run phase7`。
 
 `start-automation.js` 会自动定位开发者工具 CLI（可用命令行参数或 `WX_DEVTOOLS_CLI` 环境变量覆盖），
 并把工程根指向 `../../CampusReserve`。
 
 退出码 `0` 表示全部通过，输出末行为 `E2E_TEST = PASS`。
 当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`，Phase 3 `65/65`，Phase 4 `81/81`，
-Phase 5 `64/64`，Phase 6 `61/61`，合计 `354` 项断言。
+Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，合计 `417` 项断言。
 
 > Phase 1 的脚本自 Phase 3 起会先清除 `CR_MOCK_MODE`：`resource-list` 已接入真实数据源，
 > 不固定数据源模式就无法确定性断言。Phase 1 脚本对该页只覆盖「Phase 1 交付物」
@@ -59,10 +60,12 @@ Phase 5 `64/64`，Phase 6 `61/61`，合计 `354` 项断言。
 | `CR_MOCK_AVAIL_MODE` | 可用时间段 | `default`（缺省）/ `full` / `none` / `error` |
 | `CR_MOCK_AUTH_MODE` | 登录（Phase 5） | `success`（缺省）/ `error` |
 | `CR_MOCK_BOOKING_MODE` | 创建预约（Phase 6） | `success`（缺省）/ `conflict` / `resource-missing` / `invalid-time` / `param-error` / `unauthorized` / `error` |
+| `CR_MOCK_MY_BOOKINGS_MODE` | 我的预约（Phase 7） | `success`（缺省）/ `empty` / `unauthorized` / `error`（预约详情共用该接口） |
 
 这些键刻意分开：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
-登录的 `error` 指「登录失败」——用同一个键表达不了「详情正常但该日期时段为空」或
-「资源正常但登录失败」这类组合，而端到端测试需要分别控制它们。
+登录的 `error` 指「登录失败」，创建预约的 `conflict` 指「时段已被约走」，
+我的预约的 `error` 指「列表拉取失败」——用同一个键表达不了「详情正常但该日期时段为空」
+「资源正常但登录失败」「创建成功但列表拉取失败」这类组合，而端到端测试需要分别控制它们。
 
 另有一个**数据键**（不是模式开关）：`CR_MOCK_BOOKINGS` 存放开发期已创建的预约
 （见 `services/mock-booking-store.ts`）。测试直接读它来核对「预约记录是否真的写进去了」，
@@ -228,3 +231,15 @@ Phase 5 `64/64`，Phase 6 `61/61`，合计 `354` 项断言。
     修法是重启自动化会话：`cli.bat close --project <小程序目录>` 后再
     `node ./start-automation.js`。**改动较多源码、或会话已跨多轮改动时，跑测试前先重启一次**
     最省时间。
+
+29. **构造「不同状态的预约」直接写 `CR_MOCK_BOOKINGS`，别绕 UI。**（Phase 7）
+    该键的结构是 `{ seq, list }`（见 `services/mock-booking-store.ts`），直接写等价于
+    「服务端就有这些数据」。尤其是**已过时**与**已取消**这两类，从 UI 上根本创建不出来
+    ——前者需要把系统时间调过去，后者要等 Phase 8 才有取消入口。
+    写完后调一次页面的 `onShow()` 即可重新拉取。
+
+30. **`NODE_PATH` 设对了仍报 `MODULE_NOT_FOUND`，先查包目录是否完整。**（Phase 7 实测）
+    `miniprogram-automator` 的目录被破坏成只剩 `out/`（没有 `package.json`），
+    于是「设了 `NODE_PATH` 却依然找不到模块」——很容易误判成环境变量没生效。
+    判定方法：`Test-Path "$dir\package.json"`；修法：`npm install --prefix <隔离目录>
+    miniprogram-automator@0.12.1` 重装。**不要**把 `node_modules` 建进 `tools/e2e/`。
