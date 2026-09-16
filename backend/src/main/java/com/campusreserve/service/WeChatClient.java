@@ -1,7 +1,12 @@
 package com.campusreserve.service;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -20,8 +25,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * （见 docs/05_api_contract.md §7）。降级不是「绕过登录」：接口形状、返回字段、
  * 错误码完全一致，只是「识别用户」这一步不经过微信服务器，因此没有凭据也能完整联调与测试。
  *
- * 实测限制：本机没有 AppSecret，因此**真实调用路径未实测**——已实测的是降级路径
- * 与整条登录链路的接口形状。这一点在 docs/PROJECT_MEMORY.md §10 中记录。
+ * 实测记录（2026-09-16）：首次注入真实 AppSecret 实测即暴露一个降级路径测不出的坑——
+ * 微信响应 Content-Type 为 text/plain，RestClient 默认的 Jackson 转换器拒收，
+ * 已在构造函数中补齐（见下）。修复后可正常解析微信的 JSON 响应体
+ * （errcode / openid），完整链路以真实 wx.login 的 code 为准。
  */
 @Component
 public class WeChatClient {
@@ -35,7 +42,18 @@ public class WeChatClient {
 
     public WeChatClient(CrProperties properties) {
         this.properties = properties;
-        this.restClient = RestClient.create();
+        // 微信的 jscode2session 响应头是 text/plain（实测），而 Spring 的 Jackson 转换器
+        // 默认只认 application/json，直接 retrieve().body(...) 会抛
+        // UnknownContentTypeException（2026-09-16 真实调用首次实测暴露）。
+        // 解法：给 RestClient 补一个「额外接受 text/plain 的 Jackson 转换器」，
+        // 让微信的 text/plain 响应仍按 JSON 解析。
+        MappingJackson2HttpMessageConverter textPlainJson = new MappingJackson2HttpMessageConverter();
+        List<MediaType> supported = new ArrayList<>(textPlainJson.getSupportedMediaTypes());
+        supported.add(MediaType.TEXT_PLAIN);
+        textPlainJson.setSupportedMediaTypes(supported);
+        this.restClient = RestClient.builder()
+                .messageConverters(converters -> converters.add(0, textPlainJson))
+                .build();
     }
 
     /** AppID 与 AppSecret 都已配置才算配置完整 */
