@@ -771,12 +771,21 @@ $env:CR_DB_PASSWORD = '***'          # PowerShell
     - 说明：这类失败要**先分清「产品坏了」还是「断言过期了」**再动手；
       Phase 9 改动前先跑一遍回归，正是为了把这种过期断言当场暴露出来。
 
-16. **真实微信 `code2session` 调用未实测（Phase 10 遗留）**：
-    - 本机没有配置微信 AppSecret，`WeChatClient.isConfigured()` 全程返回 `false`，
-      联通实测走的都是**降级路径**（由 code 派生本地用户映射）。
-    - 因此「真实 `code2session` 返回 `openid` / `session_key` 后与 `user` 表对得上」
-      这条链路**只有代码、没有实测证据**。换到有凭据的环境时它会第一次被执行。
-    - 相比「假报测试通过」，这里的做法是把未覆盖的部分显式写出来（`docs/AGENTS.md` §13）。
+16. **真实微信 `code2session` 已实测到「微信业务响应」一级（2026-09-16，Phase 11 后补测）**：
+    - 开发者提供了真实 AppSecret（环境变量 `CR_WECHAT_SECRET` 注入）后，用占位 code
+      实测 `POST /api/auth/login`：微信返回 **`errcode=40029 invalid code`**——
+      证明 **AppSecret 认证、IP 白名单、响应解析、错误翻译（对外 401001）全链路已通**，
+      降级警告未出现（未走降级）。
+    - **首次真实调用即揪出一个降级路径永远测不出的 bug**：微信 `jscode2session` 的
+      响应头是 `text/plain` 而非 `application/json`，RestClient 默认 Jackson 转换器拒收，
+      `resolveOpenId` 抛 `UnknownContentTypeException`、登录一律失败。
+      已修复（提交 `5f64edb`）：给 RestClient 补一个额外接受 `text/plain` 的
+      Jackson 转换器，微信响应仍按 JSON 解析。
+    - **尚未验证的只剩最后一环**：「真 code 换真 openid」。code 由 `wx.login()` 现场产生
+      （一次性、5 分钟有效），离线无法构造，需在开发者工具或真机上点一次登录验证；
+      验证判据：`user` 表新增一行 `open_id` 形如 `o` 开头 28 位左右的微信真实 openid。
+    - 安全提醒：AppSecret 一旦出现在聊天/截图中，建议在mp.weixin.qq.com
+      「开发管理 → 开发设置」里**重置**（旧值立即失效）。
 
 17. **模拟器自动化会话会「路由过渡冻结」（测试环境现象，非产品缺陷）**：
     - 现象：跨脚本存活的自动化会话在若干次导航后，`wx.reLaunch` 的 `success`/`fail`
@@ -1014,6 +1023,7 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 预约含冲突 / 取消预约含二次确认 / 返回刷新），后端接口 `api-phase10.js` 76/76 复验无回归；
 `docs/04_development_plan.md` Phase 11 小程序七项勾选（真机测试除外）、后端七项勾选。
 遗留：Phase 11「真机测试」未做（需开发者在真实后端下用「预览」扫码复核）；
-真实微信 `code2session` 未实测（本机无 AppSecret）；真实后端 E2E 未覆盖「未授权 401002」
-与「网络失败」两分支（前端逻辑已由 mock 回归覆盖、后端侧已由 api-phase10 覆盖，见 §10 第 19 条）  
+真实微信 `code2session` 已实测到微信业务响应一级（`errcode=40029`，AppSecret/IP 白名单/
+响应解析全通，剩「真 code 换真 openid」待小程序侧验证，见 §10 第 16 条）；真实后端 E2E 未覆盖
+「未授权 401002」与「网络失败」两分支（前端逻辑已由 mock 回归覆盖、后端侧已由 api-phase10 覆盖，见 §10 第 19 条）  
 更新者：Developer（AI 协同）
