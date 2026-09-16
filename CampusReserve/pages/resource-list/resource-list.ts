@@ -3,21 +3,29 @@
  *
  * Phase 1：建立页面状态骨架（loading / success / empty / error）与分类参数接收。
  * Phase 3：接入资源接口，实现分类筛选、ResourceCard 列表、四态与下拉刷新。
+ * Phase 9：记住最近使用的筛选条件；页面跳转失败的反馈改由 utils/feedback.ts 统一给出。
  *
  * 数据经由 `services/resource.ts` 获取（调用链 Page → Service → API，技术设计 §5），
  * 后端业务 API 落地前由 services/config.ts 的 `USE_MOCK_DATA` 切到本地数据源。
  * 筛选不在本地做：真实接口本身就支持按类型筛选，本地过滤会掩盖接口差异。
  *
- * 三个刻意的设计判断：
+ * 四个刻意的设计判断：
  * 1. **筛选栏是静态内容，不随四态变化**：与首页一致，接口失败或结果为空时用户仍能
  *    切换分类，避免「一次请求失败就整页不可用」（技术设计 §7「禁止白屏」）。
  * 2. **非法 `category` 归一化为「全部」而非错误态**：详情页缺少 id 就无事可做，但列表页
  *    的筛选条件不满足时页面依然可用，一个脏链接不该把功能全部挡掉。
  * 3. **丢弃过期响应**：快速切换分类时先发的请求可能后返回，若直接渲染会覆盖新筛选的结果。
  *    因此请求返回后比对筛选条件，已变化则丢弃本次结果。
+ * 4. **筛选条件的优先级是「URL 参数 > 本地缓存 > 空（全部）」**（Phase 9）。
+ *    带参数进入说明是明确意图（从首页某个分类卡片点进来），必须以参数为准；
+ *    只有没带参数时才回退到上次看过的分类。顺序反了会出现
+ *    「点篮球场却进了自习室」这种用户完全无法理解的现象。
+ *    缓存本身见 store/preference.ts。
  */
 import { getResources } from '../../services/resource'
 import { ApiError } from '../../services/request'
+import { getLastCategory, saveLastCategory } from '../../store/preference'
+import { toastNavigateFailed } from '../../utils/feedback'
 import {
   RESOURCE_FILTER_OPTIONS,
   getResourceTypeLabel,
@@ -55,8 +63,17 @@ Page({
   },
 
   onLoad(query: Record<string, string | undefined>) {
-    const category = normalizeResourceType(query.category)
+    // 带了参数就以参数为准（哪怕是非法值，也按「全部」处理而不是去读缓存）：
+    // 参数代表用户此刻的明确意图，缓存只是「上次看过的」这个事实
+    const hasQuery = query.category !== undefined
+    const category = normalizeResourceType(
+      hasQuery ? query.category : getLastCategory(),
+    )
     this.setData({ category })
+    // 缓存记的是「最近一次浏览的分类」，从首页点某个分类进来同样是一次浏览，
+    // 所以这里也写——否则会出现「刚在列表里看过自习室，返回首页再点查看全部却回到球场」。
+    // 读取与写入的先后关系是：**先按优先级定下本次值，再把它记为最近浏览**。
+    saveLastCategory(category)
     this.applyEmptyCopy(category)
     this.loadResources()
   },
@@ -113,6 +130,9 @@ Page({
     }
 
     this.setData({ category })
+    // 记住这次的选择，下次不带参数进来时直接回到这里（见 store/preference.ts）。
+    // 点击当前分类在上面就返回了，因此不会产生「没换过却重写一次缓存」的多余写入
+    saveLastCategory(category)
     this.applyEmptyCopy(category)
     this.loadResources()
   },
@@ -159,9 +179,7 @@ Page({
     }
     wx.navigateTo({
       url: `/pages/resource-detail/resource-detail?id=${resource.id}`,
-      fail: () => {
-        wx.showToast({ title: '页面跳转失败', icon: 'none' })
-      },
+      fail: toastNavigateFailed,
     })
   },
 })

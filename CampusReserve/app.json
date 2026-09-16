@@ -12,7 +12,7 @@
     "navigationBarTitleText": "CampusReserve",
     "navigationBarTextStyle": "black",
     "backgroundColor": "#f5f6f8",
-    "backgroundTextStyle": "light"
+    "backgroundTextStyle": "dark"
   },
   "style": "v2",
   "sitemapLocation": "sitemap.json"

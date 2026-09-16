@@ -3,6 +3,7 @@
  *
  * Phase 5 交付：登录入口的落点、微信一键登录流程、登录状态保存与用户信息展示、
  * 登录失败处理、未登录状态处理（docs/04_development_plan.md Phase 5）。
+ * Phase 9：退出确认与 toast 改走 utils/feedback.ts 统一出口。
  *
  * 为什么做成独立页面而不是弹窗：
  * 1. 需求 §5 的页面结构里已经列了 `pages/login`（标注「必要时」）；
@@ -21,6 +22,7 @@
 import { login, logout } from '../../services/auth'
 import { ApiError } from '../../services/request'
 import { getLoginState, getUserInfo } from '../../store/auth'
+import { confirm, toastInfo, toastSuccess } from '../../utils/feedback'
 import type { LoginState, UserInfo } from '../../types/user'
 
 /** 兜底错误文案，非 ApiError 时使用 */
@@ -83,7 +85,7 @@ Page({
       await login()
       this.setData({ submitting: false })
       this.refresh()
-      wx.showToast({ title: '登录成功', icon: 'success' })
+      toastSuccess('登录成功')
       // 返回来源页；来源页的 onShow 会自行读到最新登录态
       setTimeout(() => this.back(), BACK_DELAY)
     } catch (error) {
@@ -92,21 +94,25 @@ Page({
     }
   },
 
-  /** 退出登录：二次确认，避免误触把登录态清掉 */
-  onLogout() {
-    wx.showModal({
+  /**
+   * 退出登录：二次确认，避免误触把登录态清掉。
+   *
+   * Phase 9 把 `wx.showModal` 换成 `await confirm(...)`：确认与后续动作不再嵌套在回调里。
+   * 「退出」按钮不用危险色——它是可逆的（再登一次就回来了），
+   * 与取消预约那种「原时段可能立刻被别人约走」的不可逆操作区别对待。
+   */
+  async onLogout() {
+    const confirmed = await confirm({
       title: '退出登录',
       content: '退出后将无法预约场地，确定退出吗？',
       confirmText: '退出',
-      success: (res) => {
-        if (!res.confirm) {
-          return
-        }
-        logout()
-        this.refresh()
-        wx.showToast({ title: '已退出登录', icon: 'none' })
-      },
     })
+    if (!confirmed) {
+      return
+    }
+    logout()
+    this.refresh()
+    toastInfo('已退出登录')
   },
 
   /** 返回来源页；登录页始终是 push 进来的，栈底兜底回首页（与详情页的 onBack 一致） */

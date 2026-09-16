@@ -6,6 +6,7 @@
  * 实现图片展示、资源信息、日期选择、TimeSlot、选择时间与预约按钮状态。
  * Phase 5：预约前补上「用户已登录」这道门槛。
  * Phase 6：接入真实的预约提交（POST /api/bookings）与全部分支处理。
+ * Phase 9：toast 与二次确认改走 utils/feedback.ts 统一出口。
  *
  * 数据经由 `services/resource.ts` / `services/booking.ts` 获取（调用链 Page → Service → API，
  * 技术设计 §5），后端业务 API 落地前由 services/config.ts 的 `USE_MOCK_DATA` 切到本地数据源。
@@ -39,6 +40,7 @@ import { ApiError, ApiErrorCode } from '../../services/request'
 import { clearSession, isLoggedIn } from '../../store/auth'
 import { BOOKING_ERROR_CODE, validateBookingPayload } from '../../utils/booking'
 import { buildDateOptions, getWeekdayLabel } from '../../utils/date'
+import { confirm, toastError, toastNavigateFailed, toastSuccess } from '../../utils/feedback'
 import { getResourceTypeLabel } from '../../utils/resource'
 import { getTimeSlotLabel, isSameTimeSlot } from '../../utils/time-slot'
 import type { DateOption } from '../../utils/date'
@@ -361,30 +363,29 @@ Page({
   /**
    * 未登录时的引导：先问一句再去登录页。
    * 抽成独立方法是因为两条路径都要用——用户本来就未登录，以及登录态被服务端判定为失效。
+   *
+   * Phase 9 改用 `await confirm(...)`：原先「确认后跳转」只能写在 `wx.showModal` 的
+   * `success` 回调里，与外层的提交流程形成两层嵌套；Promise 化后是一条直线。
    */
-  promptLogin() {
-    wx.showModal({
+  async promptLogin() {
+    const goLogin = await confirm({
       title: '需要登录',
       content: '登录后才能预约场地，是否现在去登录？',
       confirmText: '去登录',
-      success: (res) => {
-        if (!res.confirm) {
-          return
-        }
-        wx.navigateTo({
-          url: '/pages/login/login',
-          fail: () => {
-            wx.showToast({ title: '页面跳转失败', icon: 'none' })
-          },
-        })
-      },
+    })
+    if (!goLogin) {
+      return
+    }
+    wx.navigateTo({
+      url: '/pages/login/login',
+      fail: toastNavigateFailed,
     })
   },
 
   /** 提交失败的统一展示：页面内提示条 + toast */
   showSubmitError(message: string) {
     this.setData({ submitError: message })
-    wx.showToast({ title: message, icon: 'none' })
+    toastError(message)
   },
 
   /**
@@ -408,13 +409,11 @@ Page({
     })
     this.applySubmitState()
 
-    wx.showToast({ title: '预约成功', icon: 'success' })
+    toastSuccess('预约成功')
     setTimeout(() => {
       wx.navigateTo({
         url: MY_BOOKINGS_URL,
-        fail: () => {
-          wx.showToast({ title: '页面跳转失败', icon: 'none' })
-        },
+        fail: toastNavigateFailed,
       })
     }, SUBMIT_REDIRECT_DELAY)
   },

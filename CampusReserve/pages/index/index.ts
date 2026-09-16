@@ -3,6 +3,7 @@
  *
  * Phase 2 实现：顶部区域、分类入口、热门资源、推荐资源、四态展示与下拉刷新。
  * Phase 5 追加：用户区（登录入口 + 用户信息展示），登录态变化后即时反映。
+ * Phase 9 追加：页面跳转失败的反馈改由 utils/feedback.ts 统一给出。
  *
  * 数据经由 `services/resource.ts` 获取（调用链 Page → Service → API，技术设计 §5），
  * 后端业务 API 落地前由 services/config.ts 的 `USE_MOCK_DATA` 切到本地数据源。
@@ -14,6 +15,7 @@
 import { getResources } from '../../services/resource'
 import { ApiError } from '../../services/request'
 import { getLoginState, getUserInfo } from '../../store/auth'
+import { toastNavigateFailed } from '../../utils/feedback'
 import { RESOURCE_TYPE_OPTIONS } from '../../utils/resource'
 import type { PageState } from '../../types/page'
 import type { Resource } from '../../types/resource'
@@ -190,13 +192,8 @@ Page({
     this.navigate('/pages/resource-list/resource-list')
   },
 
-  /** 统一的页面跳转，失败时给出提示而不是静默无反馈 */
+  /** 统一的页面跳转，失败时给出提示而不是静默无反馈（文案由 utils/feedback.ts 统一） */
   navigate(url: string) {
-    wx.navigateTo({
-      url,
-      fail: () => {
-        wx.showToast({ title: '页面跳转失败', icon: 'none' })
-      },
-    })
+    wx.navigateTo({ url, fail: toastNavigateFailed })
   },
 })

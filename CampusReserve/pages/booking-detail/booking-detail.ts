@@ -4,8 +4,9 @@
  * Phase 1：建立页面骨架、接收 bookingId 参数、处理参数缺失的异常情况。
  * Phase 7：接入预约详情数据展示。
  * Phase 8：实现取消预约（DELETE /api/bookings/{id}）与状态刷新。
+ * Phase 9：二次确认与 toast 改走 utils/feedback.ts，确认框 Promise 化。
  *
- * 七个刻意的设计判断：
+ * 八个刻意的设计判断：
  * 1. **数据来源复用 `GET /api/bookings/my` 再按 id 查找**，不新增按 id 直查的接口。
  *    技术设计 §3 的接口清单里没有 `GET /api/bookings/{id}`，本阶段不擅自扩充契约；
  *    而且 `/my` 本来就只返回本人的数据，查不到即等于「不存在或无权访问」——
@@ -26,6 +27,9 @@
  * 7. **只给「值得重试」的失败以重试机会**（Phase 8）。网络异常保留按钮并给出错误条；
  *    而「该预约已取消 / 已结束」说明页面上的数据已经过期，重试必然失败——
  *    正确做法是直接重新拉详情，把页面刷成真实状态。
+ * 8. **「等待确认」与「请求进行中」是两个阶段，各自防重复**（Phase 9）。
+ *    确认框 Promise 化后，`await` 期间 `canceling` 尚未置位，
+ *    只靠它就拦不住「连点两次弹出两个确认框」。因此另设 `confirming`。
  */
 import { cancelBooking, getBookingDetail } from '../../services/booking'
 import { ApiError, ApiErrorCode } from '../../services/request'
@@ -36,6 +40,7 @@ import {
   resolveBookingStatus,
 } from '../../utils/booking'
 import { getWeekdayLabel } from '../../utils/date'
+import { confirm, toastError, toastInfo, toastNavigateFailed } from '../../utils/feedback'
 import type { Booking, BookingStatus } from '../../types/booking'
 import type { PageState } from '../../types/page'
 
@@ -86,6 +91,13 @@ Page({
 
     /** 当前是否允许取消：由派生状态决定，已结束 / 已取消的都不显示按钮（需求 §4.7） */
     canCancel: false,
+    /**
+     * 确认框是否正在展示（Phase 9）。
+     * 与 `canceling` 分开是因为它们是两个阶段：先「等用户确认」，再「发请求」。
+     * 没有这个标记的话，Promise 化的确认框在 `await` 期间不会改变 `canceling`，
+     * 连点两次就会弹出两个确认框。
+     */
+    confirming: false,
     /** 取消请求进行中：用于防重复与按钮文案 */
     canceling: false,
     /** 取消失败的原因；与 toast 的区别是它不会消失 */
@@ -152,24 +164,32 @@ Page({
 
   /**
    * 点击「取消预约」：先二次确认（见文件头设计判断 5）。
-   * 确认框由系统渲染，用户点「取消」时什么都不做——记录保持原状，也不发请求。
+   * 确认框由系统渲染，用户点「再想想」时什么都不做——记录保持原状，也不发请求。
+   *
+   * Phase 9 改用 `await confirm(...)`：原先「确认后发请求」只能写在 `wx.showModal` 的
+   * `success` 回调里；Promise 化后是一条直线。
+   * 代价是「等待确认」这段期间 `canceling` 还没被置位，因此需要 `confirming` 补上防重复。
    */
-  onCancel() {
-    if (this.data.canceling || !this.data.canCancel) {
+  async onCancel() {
+    if (this.data.canceling || this.data.confirming || !this.data.canCancel) {
       return
     }
 
-    wx.showModal({
+    this.setData({ confirming: true })
+    const confirmed = await confirm({
       title: '取消预约',
       content: '取消后该时间段将释放给其他同学，确定要取消吗？',
       confirmText: '确定取消',
       cancelText: '再想想',
-      success: (res) => {
-        if (res.confirm) {
-          this.performCancel()
-        }
-      },
+      // 危险操作：确认按钮用红色，让用户在点下去之前意识到这一步不可逆
+      danger: true,
     })
+    this.setData({ confirming: false })
+
+    if (!confirmed) {
+      return
+    }
+    this.performCancel()
   },
 
   /** 真正发起取消请求 */
@@ -188,7 +208,7 @@ Page({
       } else {
         await this.loadDetail()
       }
-      wx.showToast({ title: '已取消', icon: 'none' })
+      toastInfo('已取消')
     } catch (error) {
       this.afterCancelFailure(error)
     } finally {
@@ -209,20 +229,20 @@ Page({
 
     // 查不到该预约（含「不属于当前用户」）：与详情加载失败同一处理，落到 empty 态
     if (code === BOOKING_ERROR_CODE.NOT_FOUND) {
-      wx.showToast({ title: message, icon: 'none' })
+      toastError(message)
       this.setData({ pageState: 'empty' })
       return
     }
 
     // 状态冲突（已取消 / 已结束）：页面上的数据已经过期，重新拉详情把它刷成真实状态
     if (code === BOOKING_ERROR_CODE.CONFLICT) {
-      wx.showToast({ title: message, icon: 'none' })
+      toastError(message)
       this.loadDetail()
       return
     }
 
     // 登录态失效：只提示。清态与引导登录由「我的预约」页负责（见文件头设计判断 3）
-    wx.showToast({ title: message, icon: 'none' })
+    toastError(message)
   },
 
   /** error-state 的重试事件 */
@@ -244,9 +264,7 @@ Page({
   onOpenBookings() {
     wx.navigateTo({
       url: '/pages/my-bookings/my-bookings',
-      fail: () => {
-        wx.showToast({ title: '页面跳转失败', icon: 'none' })
-      },
+      fail: toastNavigateFailed,
     })
   },
 })

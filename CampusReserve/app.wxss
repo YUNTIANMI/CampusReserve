@@ -52,9 +52,20 @@ page {
 
 /* ---------- 布局 ---------- */
 
+/*
+ * 页面容器。
+ *
+ * 底部两段式写法（Phase 9 屏幕适配）：后一条 `calc` 里用了 `env(safe-area-inset-bottom)`，
+ * 它给全面屏机型（iPhone X 及以后）留出 home indicator 的高度，
+ * 避免最后一屏内容被系统手势条盖住；旧机型与开发者工具上 `env()` 取不到值，
+ * 该声明整条失效，于是回退到前一条固定的下内边距。
+ * **必须是两条独立声明**——写在一起时 `env()` 一旦不被支持，整个 `calc` 都会失效，
+ * 反而把下内边距变成 0，比不写还糟。
+ */
 .cr-page {
   min-height: 100vh;
   padding: var(--cr-space-lg) var(--cr-space-lg) var(--cr-space-xl);
+  padding-bottom: calc(var(--cr-space-xl) + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 

@@ -4,13 +4,14 @@
  * Phase 1：建立页面骨架、三类状态切换与到预约详情的路由。
  * Phase 5：接入登录态——未登录时引导登录（需求 §4.3「查看自己的预约」本身就要求有身份）。
  * Phase 7：接入 GET /api/bookings/my，渲染 BookingCard 并按状态分组展示。
+ * Phase 9：补下拉刷新；页面跳转失败的反馈改由 utils/feedback.ts 统一给出。
  *
  * 未登录时为什么不连页签一起藏掉：
  * 页签是 Phase 1 的交付物，也是「这个页面能做什么」的信息。未登录用户看到三个状态页签、
  * 再看到一句「登录后查看」，比整页只剩一个按钮更清楚自己在哪里、接下来要做什么。
  * 所以这里只替换下方的内容区。
  *
- * 五个刻意的设计判断：
+ * 六个刻意的设计判断：
  * 1. **一次请求全量，页签切换只做本地过滤**。三个页签是同一份数据的不同视图；
  *    每切一次就发一次请求，用户只会觉得卡，而且「已完成」是按当前时刻派生的
  *    （见 utils/booking.ts），两次请求之间它可能漂移。
@@ -23,11 +24,14 @@
  *    既然页面已经知道未登录，就不该先转一圈 loading 再落到引导上。
  * 5. **登录态失效要真的清掉本地状态**。与详情页提交时同一条原则：
  *    继续保留「已登录」只会让用户反复碰壁。
+ * 6. **下拉刷新只重拉数据，不动页签**（Phase 9）。用户停在「已取消」页签时下拉，
+ *    期望是「刷新这一屏」，不是「跳回待使用」——页签是用户的选择，不该被刷新动作重置。
  */
 import { getMyBookings } from '../../services/booking'
 import { ApiError, ApiErrorCode } from '../../services/request'
 import { clearSession, getLoginState, isLoggedIn } from '../../store/auth'
 import { selectBookingsByStatus } from '../../utils/booking'
+import { toastError, toastNavigateFailed } from '../../utils/feedback'
 import type { Booking, BookingStatus } from '../../types/booking'
 import type { PageState } from '../../types/page'
 import type { LoginState } from '../../types/user'
@@ -117,7 +121,7 @@ Page({
     if (apiError && apiError.code === ApiErrorCode.UNAUTHORIZED) {
       clearSession()
       this.setData({ loginState: 'LOGGED_OUT', pageState: 'loading', allBookings: [], list: [] })
-      wx.showToast({ title: '登录状态已失效，请重新登录', icon: 'none' })
+      toastError('登录状态已失效，请重新登录')
       return
     }
 
@@ -158,13 +162,22 @@ Page({
     this.loadBookings()
   },
 
+  /**
+   * 下拉刷新（Phase 9）：重新拉取数据，完成后必须收起刷新动画。
+   *
+   * 未登录时 `loadBookings()` 会立即返回，这里同样会走到 `stopPullDownRefresh`——
+   * 用户做了主动动作就一定要有回应，哪怕结论是「还是未登录」。
+   */
+  async onPullDownRefresh() {
+    await this.loadBookings()
+    wx.stopPullDownRefresh()
+  },
+
   /** 未登录引导：进入登录页 */
   onGoLogin() {
     wx.navigateTo({
       url: '/pages/login/login',
-      fail: () => {
-        wx.showToast({ title: '页面跳转失败', icon: 'none' })
-      },
+      fail: toastNavigateFailed,
     })
   },
 
@@ -176,9 +189,7 @@ Page({
     }
     wx.navigateTo({
       url: `/pages/booking-detail/booking-detail?id=${booking.id}`,
-      fail: () => {
-        wx.showToast({ title: '页面跳转失败', icon: 'none' })
-      },
+      fail: toastNavigateFailed,
     })
   },
 })
