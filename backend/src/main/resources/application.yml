@@ -1,12 +1,69 @@
 server:
-  port: 8080
+  # 端口可由环境变量覆盖（CR_SERVER_PORT），便于与前端 services/config.ts 的地址对齐
+  port: ${CR_SERVER_PORT:8080}
 
 spring:
   application:
     name: campusreserve-backend
 
-# 数据源（MySQL）在 Phase 10「后端与数据层整理」中启用，
-# 届时在此追加 spring.datasource.* 配置，并补充 mysql-connector-j 依赖。
+  # ---------------------------------------------------------------------------
+  # 数据源（Phase 10 启用）
+  #
+  # 本仓库是公开仓库，口令**不写入本文件**：连接信息全部通过环境变量注入，
+  # 默认值只含地址与库名。本地联调示例（PowerShell）：
+  #   $env:CR_DB_PASSWORD = '***'
+  #   ./mvnw spring-boot:run
+  #
+  # createDatabaseIfNotExist=true：库不存在时自动创建（服务端首次启动即可用）；
+  # allowPublicKeyRetrieval=true：MySQL 8 默认 caching_sha2_password 握手需要
+  # ---------------------------------------------------------------------------
+  datasource:
+    url: ${CR_DB_URL:jdbc:mysql://127.0.0.1:3308/campusreserve?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&connectionCollation=utf8mb4_0900_ai_ci&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${CR_DB_USERNAME:root}
+    password: ${CR_DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # ---------------------------------------------------------------------------
+  # 建表与种子数据：结构以 docs/03_database_design.md 为准，
+  # 执行形态是 classpath:db/schema.sql 与 classpath:db/data.sql。
+  # 两个脚本都写成幂等形态（IF NOT EXISTS / INSERT IGNORE），
+  # 因此 mode=always 可以反复启动，不会重复插入、也不会覆盖已有数据。
+  # ---------------------------------------------------------------------------
+  sql:
+    init:
+      mode: always
+      # 必须显式指定 UTF-8：不指定时 Spring 用**平台默认编码**读脚本，
+      # 在中文 Windows 上会按 GBK 解读，种子资源的中文名称会直接变成乱码入库。
+      encoding: UTF-8
+      schema-locations: classpath:db/schema.sql
+      data-locations: classpath:db/data.sql
+
+  # 表结构由上述 SQL 脚本负责，Hibernate 不得插手（既不建表也不校验）
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+# -----------------------------------------------------------------------------
+# 项目自身配置（对应 config/CrProperties.java）
+#
+# token.secret：HMAC 签名密钥。**未配置时服务端每次启动随机生成一把并打印警告**，
+#   此时重启会让既有登录态失效（开发期可接受，且比在公开仓库里写死默认密钥安全）。
+#   生产/长期联调请通过环境变量 CR_TOKEN_SECRET 注入固定值。
+# wechat.app-id / app-secret：微信 code2session 凭据。**未配置时自动降级为开发期
+#   本地用户映射**（见 docs/05_api_contract.md §7），配置后自动切真实调用。
+# -----------------------------------------------------------------------------
+cr:
+  token:
+    secret: ${CR_TOKEN_SECRET:}
+    ttl-hours: ${CR_TOKEN_TTL_HOURS:720}
+  wechat:
+    app-id: ${CR_WECHAT_APPID:}
+    app-secret: ${CR_WECHAT_SECRET:}
 
 logging:
   level:
