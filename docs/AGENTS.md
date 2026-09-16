@@ -289,13 +289,22 @@ node ./tools/api-test/api-phase10.js            # Phase 10：76 项，含 8 条�
 小程序 ↔ 真实后端联通实测（Phase 10 起）：
 ```bash
 # 前置：后端已连 MySQL 启动；本文件所在工程为 tools/e2e
-#       services/config.ts 的 USE_MOCK_DATA 置为 false（跑完改回 true）
+#       services/config.ts 的 USE_MOCK_DATA 置为 false（Phase 11 起为正式状态，无需改回）
 #       并已 node ./start-automation.js
-node ./e2e-real-backend.js ws://127.0.0.1:9420 <预置预约id>
+node ./e2e-real-backend.js ws://127.0.0.1:9420 <预置预约id>   # Phase 10：核心读写链路
+node ./e2e-phase11.js ws://127.0.0.1:9420                      # Phase 11：完整回归（36 项）
+node ./e2e-phase11-helper.js clean                             # 清理 phase11 写入的预约
 ```
-它证明的是「**小程序真的在通过 HTTP 读写这个后端**」——与「后端接口本身是对的」是两件事，
+它们证明的是「**小程序真的在通过 HTTP 读写这个后端**」——与「后端接口本身是对的」是两件事，
 不能互相替代。核心手法是**反证**：把 `CR_MOCK_MODE` 置成 `empty`（mock 被要求返回空）后
 列表仍渲染出 8 条后端种子资源，才能排除 mock 忘关造成的假阳性。
+`e2e-phase11.js` 的失败分支不靠测试后门，全部构造真实场景注入（冲突=真抢同一时段、
+资源不存在=访问不存在的 id、空数据=筛选无结果 + 未登录引导）；未授权 401002 与网络失败
+的页面处理逻辑由 mock 回归覆盖、后端侧由 `api-phase10.js` 覆盖，不做进程级编排。
+
+**`USE_MOCK_DATA` 的终态**：Phase 11 起为 `false`（小程序正式跑真实后端），不再是临时切换。
+前九套 mock 回归（`e2e-phase1..9.js`）依赖 `USE_MOCK_DATA = true`，因此只在切回 mock 时才可跑，
+属历史回归资产；日常联调回归以 `e2e-phase11.js` + `api-phase10.js` 为准。
 
 **后端联通测试的已知环境陷阱**：自动化会话跨脚本存活，若上一轮把**登录页**留在页面栈里，
 登录页那个「成功后延迟返回」的定时器会弹掉随后压入的新页面；连续几轮后模拟器的

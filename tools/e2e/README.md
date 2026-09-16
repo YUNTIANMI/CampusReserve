@@ -42,7 +42,9 @@ node ./e2e-phase9.js ws://127.0.0.1:9420   # Phase 9：统一反馈层、筛选�
 ### 小程序 ↔ 真实后端联通实测（Phase 10 起）
 
 ```bash
-node ./e2e-real-backend.js ws://127.0.0.1:9420 <预置预约id>
+node ./e2e-real-backend.js ws://127.0.0.1:9420 <预置预约id>   # Phase 10：核心读写链路（28 项）
+node ./e2e-phase11.js ws://127.0.0.1:9420                      # Phase 11：完整回归（36 项，成功+失败分支）
+node ./e2e-phase11-helper.js clean                             # 清理 phase11 写入的预约数据
 ```
 
 这一套与前九套**验证的是不同的东西**，不能互相替代：
@@ -50,17 +52,19 @@ node ./e2e-real-backend.js ws://127.0.0.1:9420 <预置预约id>
 | | 证明什么 | 数据来源 |
 | --- | --- | --- |
 | `e2e-phase1..9.js` | 页面与交互是对的（含各失败分支） | 开发期本地数据源（`USE_MOCK_DATA = true`） |
-| `e2e-real-backend.js` | **小程序真的在通过 HTTP 读写后端** | 真实后端 + MySQL |
+| `e2e-real-backend.js` | **小程序真的在通过 HTTP 读写后端**（核心链路） | 真实后端 + MySQL |
+| `e2e-phase11.js` | **切真实后端后全链路 + 各失败分支仍正确** | 真实后端 + MySQL |
 | `../api-test/api-phase10.js` | 后端接口本身是对的（不经过小程序） | 真实后端 + MySQL |
 
 前置条件（缺一不可）：
 1. 后端已连 MySQL 启动（默认 `http://127.0.0.1:8080`），启动时需注入 `CR_DB_PASSWORD`
    （公开仓库不写口令，缺了会直接 `Access denied ... (using password: NO)`）
 2. `CampusReserve/services/config.ts` 的 `USE_MOCK_DATA` 置为 **`false`**
-   ——**这是临时切换，跑完必须改回 `true`**，否则前九套回归会失效
+   ——**Phase 11 起这是正式状态**（小程序跑真实后端），不再是临时切换。
+   前九套 mock 回归因此只在 `USE_MOCK_DATA = true` 时才可跑，属历史回归资产
 3. 开发者工具「详情 → 本地设置」勾选「不校验合法域名…」（本地 http 回环地址必需）
 4. 自动化模式已启动（`node ./start-automation.js`）
-5. 先用 HTTP 为该用户预置一条预约，把 id 作为参数传进来。
+5. （仅 `e2e-real-backend.js`）先用 HTTP 为该用户预置一条预约，把 id 作为参数传进来。
    小程序里 `wx.login` 拿到的 code 经后端降级映射到固定开发用户，因此用任意非 `dev:` 开头的
    code 登录得到的正是**同一个用户**——「小程序里能看到这条预约」因此在证明
    「服务端按凭证过滤归属」这件事。
@@ -69,13 +73,19 @@ node ./e2e-real-backend.js ws://127.0.0.1:9420 <预置预约id>
 列表仍渲染出 8 条后端种子资源，才证明数据只可能来自 HTTP。
 这比「看到数据就算通」强得多——后者在 `USE_MOCK_DATA` 忘关时会给出假阳性。
 
+`e2e-phase11.js` 不靠任何测试后门，失败分支全部**构造真实场景**注入：
+冲突=真抢同一时段、资源不存在=访问不存在的 id、空数据=筛选无结果 + 未登录引导。
+未授权 401002 与网络失败两个分支的页面处理逻辑已由 mock 回归覆盖、后端侧已由
+`api-phase10.js` 覆盖，不在真实后端 E2E 里做进程级编排（详见脚本头部「已知边界」）。
+
 `start-automation.js` 会自动定位开发者工具 CLI（可用命令行参数或 `WX_DEVTOOLS_CLI` 环境变量覆盖），
 并把工程根指向 `../../CampusReserve`。
 
 退出码 `0` 表示全部通过，输出末行为 `E2E_TEST = PASS`。
 当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`，Phase 3 `65/65`，Phase 4 `81/81`，
 Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，Phase 8 `73/73`，Phase 9 `69/69`
-（九套合计 `559` 项），Phase 10 联通实测 `28/28`，
+（九套合计 `559` 项，`USE_MOCK_DATA = true` 时有效），Phase 10 联通实测 `28/28`，
+Phase 11 真实后端完整回归 `36/36`（`USE_MOCK_DATA = false`），
 后端接口实测见 `../api-test/api-phase10.js`（`76/76`）。
 
 > Phase 1 的脚本自 Phase 3 起会先清除 `CR_MOCK_MODE`：`resource-list` 已接入真实数据源，
