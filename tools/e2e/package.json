@@ -13,7 +13,8 @@
     "phase6": "node ./e2e-phase6.js ws://127.0.0.1:9420",
     "phase7": "node ./e2e-phase7.js ws://127.0.0.1:9420",
     "phase8": "node ./e2e-phase8.js ws://127.0.0.1:9420",
-    "phase9": "node ./e2e-phase9.js ws://127.0.0.1:9420"
+    "phase9": "node ./e2e-phase9.js ws://127.0.0.1:9420",
+    "real-backend": "node ./e2e-real-backend.js ws://127.0.0.1:9420"
   },
   "devDependencies": {
     "miniprogram-automator": "^0.12.1"
