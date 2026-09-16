@@ -21,11 +21,11 @@
 
 ## 2. Current Phase
 
-当前阶段：Phase 6 - 创建预约（已完成，E2E 实测 61/61 通过）
+当前阶段：Phase 7 - 我的预约（已完成，E2E 实测 63/63 通过）
 
 当前任务：无
 
-下一阶段：Phase 7 - 我的预约
+下一阶段：Phase 8 - 取消预约
 
 ## 3. Completed
 
@@ -121,15 +121,32 @@ Phase 6（创建预约）：
 - [x] 端到端测试：真实开发者工具中 61/61 通过（`tools/e2e/e2e-phase6.js`）
 - [x] 回归测试：Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、Phase 4 81/81、Phase 5 64/64 通过
 
+Phase 7（我的预约）：
+- [x] 获取我的预约：`services/booking.ts` 的 `getMyBookings()` → `GET /api/bookings/my`，
+  Phase 10 接真实后端，本阶段由 `mockGetMyBookings()` 顶替
+- [x] `BookingCard` 组件（`components/booking-card/`）：资源名 / 地点 / 日期（含星期）/ 时间段 /
+  状态标签；事件 `cardtap`，不硬编码路由
+- [x] 待使用 / 已完成 / 已取消三个页签：一次请求全量、**切换页签只做本地过滤**
+- [x] 状态派生：`utils/booking.ts` 的 `resolveBookingStatus()` 把「时段是否已结束」折算成
+  展示状态，页面据此分组（服务端 `status` 只记录显式变更，不会自己变成「已完成」）
+- [x] 排序：待使用按时间升序，已完成 / 已取消按降序
+- [x] 预约详情页接入数据：复用 `/bookings/my` 再按 id 查找（见 §10 第 10 条）
+- [x] 未登录不发起请求；登录态失效时清掉本地登录态并引导重新登录
+- [x] 静态检查：`tsc --noEmit` 0 错误（34 个 `.ts` 全部纳入编译）
+- [x] 端到端测试：真实开发者工具中 63/63 通过（`tools/e2e/e2e-phase7.js`）
+- [x] 回归测试：Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、Phase 4 81/81、
+  Phase 5 64/64、Phase 6 61/61 通过（七套合计 **417** 项）
+
 ## 4. In Progress
 
 暂无。
 
 ## 5. Next Tasks
 
-1. Phase 7：`GET /api/bookings/my` 与 `services/mock-booking.ts` 的「我的预约」数据源
-2. Phase 7：`BookingCard` 组件与我的预约页的待使用 / 已完成 / 已取消分组展示
-3. Phase 7：预约详情页接入数据（替换 Phase 1 骨架）
+1. Phase 8：`DELETE /api/bookings/{id}` 与 `services/booking.ts` 的 `cancelBooking(id)`
+2. Phase 8：取消二次确认、状态更新为 `CANCELLED`、时间段恢复可用（`overlayBookedSlots`
+   已按「已取消不算占用」实现，见 `mock-booking-store.ts`）
+3. Phase 8：返回页面刷新（我的预约 `onShow` 已每次重新拉取，详情页需补 `onShow` 刷新）
 
 ## 6. Current Frontend State
 
@@ -157,7 +174,8 @@ AppID：`wxb97024eb0305368d`
 服务（`services/`）：
 - `config.ts`：API 根地址、超时常量，以及开发期数据源开关 `USE_MOCK_DATA` 与模式存储键
   （Phase 4 追加 `MOCK_AVAIL_MODE_STORAGE_KEY`、Phase 5 追加 `MOCK_AUTH_MODE_STORAGE_KEY`、
-  Phase 6 追加 `MOCK_BOOKING_MODE_STORAGE_KEY`，四个键刻意分开，理由见 §11）
+  Phase 6 追加 `MOCK_BOOKING_MODE_STORAGE_KEY`、Phase 7 追加 `MOCK_MY_BOOKINGS_MODE_STORAGE_KEY`，
+  五个键刻意分开，理由见 §11）
 - `request.ts`：封装 `wx.request`，统一归一化为 `ApiError`（区分网络失败 / 超时 / HTTP 非 2xx / 业务 code ≠ 0）
 - `resource.ts`（Phase 2 / Phase 4）：资源业务接口
   - `getResources(query)`（Phase 2）
@@ -180,15 +198,23 @@ AppID：`wxb97024eb0305368d`
     抛出 `ApiError(401001)` 模拟登录失败
   - **刻意不返回 `avatarUrl`**：与「开发期不提供 `imageUrl`」同一决策（测试不依赖网络图片），
     登录页头像用昵称首字占位
-- `booking.ts`（Phase 6）：预约业务接口
+- `booking.ts`（Phase 6 创建，Phase 7 追加查询）：预约业务接口
   - `createBooking(payload)` → `POST /api/bookings`，请求头带 `Authorization`（凭证取自 `store/auth`）；
     显式列出契约里的四个字段，避免将来 payload 增加前端专用字段时被误传
+  - `getMyBookings()`（Phase 7）→ `GET /api/bookings/my`。**入参不含 userId**：
+    身份由服务端从凭证解析，「只能看到自己的预约」是服务端边界，前端不过滤也无从伪造。
+    返回**全量状态**的原始列表，排序与分组交给页面
+  - `getBookingDetail(id)`（Phase 7）：复用 `getMyBookings()` 再按 id 查找，
+    查不到抛 `ApiError(404001)`。不新增 `GET /api/bookings/{id}`，理由见 §10 第 10 条
   - 本层是纯传输层、不做校验：客户端预校验由页面调用 `utils/booking.ts` 完成，
     服务端返回的 `ApiError.code` 原样交给调用方分流
-- `mock-booking.ts`（Phase 6）：开发期创建预约数据源
+- `mock-booking.ts`（Phase 6 创建，Phase 7 追加查询）：开发期预约数据源
   - `mockCreateBooking(payload)`：延迟 600ms；`CR_MOCK_BOOKING_MODE` 可注入
     `conflict` / `resource-missing` / `invalid-time` / `param-error` / `unauthorized` / `error`，
     缺省 `success` 走完整真实校验（参数 → 资源存在 → 时段在开放范围且仍可预约 → 未重复预约）
+  - `mockGetMyBookings()`（Phase 7）：延迟 500ms；`CR_MOCK_MY_BOOKINGS_MODE` 可注入
+    `empty` / `unauthorized` / `error`。**无凭证时直接以 `UNAUTHORIZED` 失败**（不是返回空列表）——
+    空列表与「查不到」在页面上是同一副样子，用户会以为自己真的没有预约
   - 交付物不只是「造一条假数据」，而是把**服务端该做的校验**先按技术设计 §11 实现一遍，
     使页面代码写完后把开关改为 `false` 接真实后端时行为一致
   - 转出开发期预约表的读/清接口（实现见 `mock-booking-store.ts`），供 Phase 7 取用
@@ -217,11 +243,19 @@ AppID：`wxb97024eb0305368d`
 - `time-slot.ts`（Phase 4）：时段状态中文标签 `getTimeSlotStatusLabel()`、
   是否可选 `isTimeSlotSelectable()`（只认 `AVAILABLE`）、时段文案 `getTimeSlotLabel()`、
   同一时段判定 `isSameTimeSlot()`
-- `booking.ts`（Phase 6）：预约域共享常量与校验
+- `booking.ts`（Phase 6 创建，Phase 7 追加状态派生）：预约域共享常量与纯计算
   - `BOOKING_ERROR_CODE`：`PARAM 400001` / `INVALID_TIME 400002` / `RESOURCE_NOT_FOUND 404001` /
-    `CONFLICT 409001`（编码沿用「HTTP 状态码 × 1000 + 序号」，`CONFLICT` 与技术设计 §13 示例一致）
+    `NOT_FOUND 404001` / `CONFLICT 409001`（编码沿用「HTTP 状态码 × 1000 + 序号」，
+    `CONFLICT` 与技术设计 §13 示例一致；`NOT_FOUND` 指「预约不存在或不属于当前用户」）
+  - `BOOKING_STATUS_LABELS`（Phase 7）：`PENDING` / `COMPLETED` / `CANCELLED` 的中文名，
+    页签与卡片标签共用一份文案
   - `validateBookingPayload(payload, now?)`：客户端预校验，返回 `{ ok, code, message }`
-  - `resolveBookingStart(date, startTime)`：把「日期 + 开始时间」合成本地 `Date`
+  - `resolveBookingStart(date, startTime)` / `resolveBookingEnd(date, endTime)`：合成两端时刻
+  - `resolveBookingStatus(booking, now?)`（Phase 7）：派生一条预约**此刻**的展示状态。
+    `CANCELLED` / `COMPLETED` 是终态直接沿用；`PENDING` 且结束时刻已过则视为 `COMPLETED`。
+    **只派生、不写回**——让 `GET` 产生写副作用不干净，真实后端自行推进也不冲突
+  - `selectBookingsByStatus(list, status, now?)`（Phase 7）：筛选 + 排序。
+    待使用升序、已完成 / 已取消降序
   - 错误码为什么放在 utils：开发期数据源与真实接口层都要用它，放在任一侧都会形成循环依赖；
     本文件不 import 任何 services，依赖方向始终单向
 
@@ -260,10 +294,23 @@ AppID：`wxb97024eb0305368d`
   （加载中为「登录中…」）；已登录时展示用户信息（昵称、用户 ID、头像首字占位）+「退出登录」
   （二次确认）。`onShow` 调 `refresh()` 同步登录态；登录成功后 `wx.showToast` 再延迟约 600ms
   `navigateBack` 返回来源页
-- `pages/my-bookings`（Phase 1 完成，Phase 5 追加未登录引导）：待使用 / 已完成 / 已取消三个状态页签；
-  **未登录时展示 `empty-state` 登录引导**（「登录后查看我的预约」+「去登录」）而不是空列表，
-  已登录才展示原有骨架。三个 `.tabs__item` 与默认 `emptyText` 保持不变（Phase 1 测试依赖）
-- `pages/booking-detail`：接收 `id` 参数，参数缺失时展示错误态
+- `pages/my-bookings`（Phase 1 骨架，Phase 5 登录引导，Phase 7 接入真实列表）：
+  待使用 / 已完成 / 已取消三个状态页签 + `BookingCard` 列表 + 四态。五个关键设计：
+  1. **未登录时展示 `empty-state` 登录引导**（「登录后查看我的预约」+「去登录」）而不是空列表，
+     且**连页签一起保留**——未登录用户看到三个页签再看到一句引导，比整页只剩一个按钮更清楚；
+  2. **未登录不发起请求**：没有凭证时服务端无从判断身份，请求必然 401，
+     既然页面已经知道未登录，就不该先转一圈 loading 再落到引导上；
+  3. **一次请求全量、页签切换只做本地过滤**：三个页签是同一份数据的不同视图，
+     每切一次都发请求只会让用户等，且「已完成」按当前时刻派生，两次请求之间会漂移；
+  4. **每次 `onShow` 都重新拉取**：预约状态会随时间和别处操作变化（取消、新增、时段过期），
+     这一页是「我接下来要做什么」的入口，显示过期数据比多等半秒严重；
+  5. **登录态失效时清掉本地登录态并引导重新登录**（与详情页提交时同一条原则）。
+  三个 `.tabs__item` 与默认 `emptyText` 保持不变（Phase 1 测试依赖）
+- `pages/booking-detail`（Phase 1 骨架，Phase 7 接入数据）：参数非法 → error 态；
+  查不到该预约 → **empty 态**（请求本身成功了，重试没有意义，不给「重新加载」）；
+  只有网络 / 超时 / HTTP 层故障才落到可重试的 error 态。
+  数据经 `getBookingDetail(id)` 获得（复用 `/bookings/my`，见 §10 第 10 条）；
+  本页**不处理登录态**——清登录态并引导重新登录由「我的预约」页负责，不在每页重复
 
 组件：
 - 已创建：`loading-state`、`empty-state`（含操作事件）、`error-state`（含 `retry` 事件）
@@ -272,10 +319,13 @@ AppID：`wxb97024eb0305368d`
   Phase 3 在列表页直接复用，组件本身无需改动
 - 已创建（Phase 4）：`time-slot`（时间段；属性 `slot-data` / `selected`，事件 `slottap`，
   仅 `AVAILABLE` 触发。**属性名不能叫 `slot`**，见 §10 第 7 条）
-- 待创建：`CategoryCard`、`BookingCard`
+- 已创建（Phase 7）：`booking-card`（预约卡片；属性 `booking`，事件 `cardtap`。
+  状态标签展示 `resolveBookingStatus()` 的**派生**结果而非 `booking.status` 原值——
+  服务端不会把「时段过去了」写成 `COMPLETED`，但卡片上必须显示成「已完成」）
+- 待创建：`CategoryCard`
 
 分类筛选 UI 目前在列表页内联实现（chip 形态，与首页的分类卡片入口形态不同），
-暂未抽取为 `CategoryCard`；`BookingCard` 留待 Phase 7。
+暂未抽取为 `CategoryCard`。
 
 ## 7. Current Backend State
 
@@ -334,8 +384,11 @@ cd backend
 - `GET /api/resources`（Phase 2）、`GET /api/resources/{id}`、`GET /api/resources/{id}/availability`（Phase 4）
 - `POST /api/auth/login`（Phase 5）
 - `POST /api/bookings`（Phase 6）
+- `GET /api/bookings/my`（Phase 7；预约详情也复用它，见 §10 第 10 条）
 
-尚未被任何前端代码调用的接口：`GET /api/bookings/my`（Phase 7）、`DELETE /api/bookings/{id}`（Phase 8）。
+尚未被任何前端代码调用的接口：`DELETE /api/bookings/{id}`（Phase 8）。
+
+技术设计 §3 的接口清单里**没有** `GET /api/bookings/{id}`，Phase 7 刻意未扩充契约。
 
 API 设计以：
 `docs/05_api_contract.md`
@@ -392,7 +445,7 @@ API 设计以：
    - 解析 `page.callMethod()` 调用 async 方法时，其返回的 Promise 无法被序列化；
      需要「触发页面方法并读状态」时，在同一次 `evaluate` 内先调用再读，可稳定捕获瞬时状态。
    - 现成可用的端到端脚本与说明见 `tools/e2e/`（Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、
-     Phase 4 81/81、Phase 5 64/64、Phase 6 61/61 通过）。
+     Phase 4 81/81、Phase 5 64/64、Phase 6 61/61、Phase 7 63/63 通过，合计 417 项）。
 
 6. **模拟器的路由过渡必须先收尾再发下一次导航（Phase 3 实测，极易误判为产品缺陷）**：
    - `wx.navigateTo` / `wx.navigateBack` 的**栈顶路由更新很快，但整段过渡动画约 1.2 秒才
@@ -469,6 +522,26 @@ API 设计以：
      （`cli.bat close --project <小程序目录>` 后再 `node ./start-automation.js`）。
      见 `tools/e2e/README.md` 第 28 条。
 
+10. **预约详情复用 `GET /api/bookings/my`，每次进详情都拉一次全量列表（Phase 7 的刻意取舍）**：
+    - 技术设计 §3 的接口清单里没有 `GET /api/bookings/{id}`，本阶段**不擅自扩充契约**，
+      故 `services/booking.ts` 的 `getBookingDetail(id)` 先调 `getMyBookings()` 再按 id 查找，
+      查不到抛 `ApiError(404001)`。真实后端接上后行为一致（同一条代码路径）。
+    - 额外收益：天然满足需求「用户只能看到自己的预约」——`/my` 本来就只返回本人的数据，
+      查不到即等于「不存在或无权访问」，不必再写一遍归属校验。
+    - **代价**：每次进详情都会拉一次全量列表。开发期与数据量小的场景无感；
+      若将来成为瓶颈，正确做法是补一个**带归属校验**的 `GET /api/bookings/{id}`，
+      届时只改 `getBookingDetail()` 内部，调用方无需改动。
+    - 附带影响：预约详情页因此也会被 `CR_MOCK_MY_BOOKINGS_MODE` 影响（它共用同一个接口）。
+
+11. **「已完成」是派生状态，不是服务端写回的状态（Phase 7 的刻意取舍）**：
+    - 服务端 `Booking.status` 只记录**显式变更**：创建即 `PENDING`、取消即 `CANCELLED`。
+      「场次已经结束了」没有任何人去点一下，状态却已经变了。
+    - 前端用 `utils/booking.ts` 的 `resolveBookingStatus()` **派生展示状态**
+      （`PENDING` 且结束时刻已过 → `COMPLETED`），**不改数据**。
+    - 为什么不顺手在查询时把过期记录写成 `COMPLETED`：那是让 `GET` 产生写副作用。
+      状态推进该由服务端定时任务或下次写入时做；真实后端哪天自行推进了，
+      这里的判断（`COMPLETED` 直接沿用）也不会冲突。
+
 ## 11. Important Decisions
 
 采用：
@@ -516,7 +589,7 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
   使页面在后端 API（Phase 10）落地前即可验证 success / empty / error 三种展示、
   登录 / 登录失败两条路径，以及创建预约的成功与六种失败路径。
 - 该开关只决定数据来源，页面与组件代码不感知；后端联调时改为 `false` 即切到真实接口。
-- 四个模式存储键供调试与端到端测试注入，属开发期机制，联调前应连同开关一并移除：
+- 五个模式存储键供调试与端到端测试注入，属开发期机制，联调前应连同开关一并移除：
   - `CR_MOCK_MODE`（`success` | `empty` | `error`）：作用于资源列表与资源详情，
     `empty` 在详情页的含义是「该资源不存在」
   - `CR_MOCK_AVAIL_MODE`（`default` | `full` | `none` | `error`，Phase 4 追加）：作用于可用时间段，
@@ -526,10 +599,15 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
   - `CR_MOCK_BOOKING_MODE`（Phase 6 追加）：作用于创建预约，`success`(缺省) 走完整真实校验，
     其余六值分别是 `conflict` / `resource-missing` / `invalid-time` / `param-error` /
     `unauthorized` / `error`，覆盖从客户端凭据无法构造的失败路径
-- **四个键刻意分开**：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
-  登录的 `error` 指「登录接口失败」，创建预约的 `conflict` 指「时段已被约走」——
+  - `CR_MOCK_MY_BOOKINGS_MODE`（Phase 7 追加）：作用于 `GET /api/bookings/my`，
+    取值 `success`(缺省) / `empty` / `unauthorized` / `error`。
+    与上一个键分开是因为两者是**不同接口**——要能表达「创建成功但列表拉取失败」
+    「列表正常但提交冲突」这类组合；预约详情共用该接口，因此同样受它影响
+- **五个键刻意分开**：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
+  登录的 `error` 指「登录接口失败」，创建预约的 `conflict` 指「时段已被约走」，
+  我的预约的 `error` 指「列表拉取失败」——
   一个键表达不了这些组合（例如「详情正常但该日期时段为空」「资源列表正常但登录失败」
-  「登录成功但预约时段已被别人约走」）。
+  「登录成功但预约时段已被别人约走」「创建成功但列表拉取失败」）。
 - 另有一个数据键（不是模式开关）：`CR_MOCK_BOOKINGS` 存开发期已创建的预约，
   见 `services/mock-booking-store.ts`。
 - 已定决策：**开发期数据源不提供 `imageUrl`、也不提供 `avatarUrl`**，因此详情页与资源卡片始终展示
@@ -546,6 +624,14 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 - 已定决策（Phase 6）：**「时间段是否仍可用」永远由服务端判定**，客户端只判「不依赖服务端数据
   就能判定的部分」（资源 ID / 日期 / 时间格式与先后 / 不得早于当前时间）。
   原因是页面上的时段是加载时的快照，用户停留久了、或别人抢先预约了，它就不再成立。
+- 已定决策（Phase 7）：**「我的预约」一次请求全量，三个页签只做本地过滤与排序**。
+  它们是同一份数据的不同视图；每切一次都发请求只会让用户等，且「已完成」按当前时刻派生，
+  两次请求之间会漂移。页面每次 `onShow` 都重新拉取，保证状态新鲜。
+- 已定决策（Phase 7）：**未登录时不发起「我的预约」请求**。没有凭证时服务端无从判断身份，
+  请求必然是 401；既然页面已经知道未登录，就不该先转一圈 loading 再落到引导上。
+- 已定决策（Phase 7）：**「已完成」由前端派生、服务端不写回**（详见 §10 第 11 条）。
+- 已定决策（Phase 7）：**预约详情不新增 `GET /api/bookings/{id}`，复用 `/bookings/my`**
+  （详见 §10 第 10 条）。技术设计 §3 的接口清单未变。
 
 当前不使用：
 - Redis
@@ -579,7 +665,7 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 
 ## 14. Last Updated
 
-更新时间：2026-09-15  
+更新时间：2026-09-16  
 最后完成任务：Phase 6 创建预约完成并通过端到端测试（真实开发者工具中 61/61 通过，
 Phase 1 / Phase 2 / Phase 3 / Phase 4 / Phase 5 回归 36/36、47/47、65/65、81/81、64/64）；
 实现 Booking 数据模型、`POST /api/bookings` 前端接入、详情页真实提交（提交中态 / 成功提示与跳转 /
