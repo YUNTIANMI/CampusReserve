@@ -11,6 +11,8 @@
     "phase4": "node ./e2e-phase4.js ws://127.0.0.1:9420",
     "phase5": "node ./e2e-phase5.js ws://127.0.0.1:9420",
     "phase6": "node ./e2e-phase6.js ws://127.0.0.1:9420",
+    "phase7": "node ./e2e-phase7.js ws://127.0.0.1:9420",
+    "phase8": "node ./e2e-phase8.js ws://127.0.0.1:9420",
     "phase7": "node ./e2e-phase7.js ws://127.0.0.1:9420"
   },
   "devDependencies": {

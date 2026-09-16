@@ -33,16 +33,17 @@ node ./e2e-phase4.js ws://127.0.0.1:9420   # Phase 4：资源详情、日期条�
 node ./e2e-phase5.js ws://127.0.0.1:9420   # Phase 5：登录入口、一键登录流程、登录态保存、未登录引导
 node ./e2e-phase6.js ws://127.0.0.1:9420   # Phase 6：创建预约、成功提示与跳转、冲突与各类失败
 node ./e2e-phase7.js ws://127.0.0.1:9420   # Phase 7：我的预约、状态派生与分组、BookingCard、预约详情
+node ./e2e-phase8.js ws://127.0.0.1:9420   # Phase 8：取消预约、二次确认、状态更新、时间段恢复、失败分流
 ```
 
-也可以用 npm 脚本：`npm run auto` / `npm run phase1` … `npm run phase7`。
+也可以用 npm 脚本：`npm run auto` / `npm run phase1` … `npm run phase8`。
 
 `start-automation.js` 会自动定位开发者工具 CLI（可用命令行参数或 `WX_DEVTOOLS_CLI` 环境变量覆盖），
 并把工程根指向 `../../CampusReserve`。
 
 退出码 `0` 表示全部通过，输出末行为 `E2E_TEST = PASS`。
 当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`，Phase 3 `65/65`，Phase 4 `81/81`，
-Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，合计 `417` 项断言。
+Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，Phase 8 `73/73`，合计 `490` 项断言。
 
 > Phase 1 的脚本自 Phase 3 起会先清除 `CR_MOCK_MODE`：`resource-list` 已接入真实数据源，
 > 不固定数据源模式就无法确定性断言。Phase 1 脚本对该页只覆盖「Phase 1 交付物」
@@ -61,11 +62,13 @@ Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，合计 `417` 项断言。
 | `CR_MOCK_AUTH_MODE` | 登录（Phase 5） | `success`（缺省）/ `error` |
 | `CR_MOCK_BOOKING_MODE` | 创建预约（Phase 6） | `success`（缺省）/ `conflict` / `resource-missing` / `invalid-time` / `param-error` / `unauthorized` / `error` |
 | `CR_MOCK_MY_BOOKINGS_MODE` | 我的预约（Phase 7） | `success`（缺省）/ `empty` / `unauthorized` / `error`（预约详情共用该接口） |
+| `CR_MOCK_CANCEL_MODE` | 取消预约（Phase 8） | `success`（缺省）/ `not-found` / `conflict` / `unauthorized` / `error` |
 
 这些键刻意分开：列表/详情的 `empty` 指「没有资源」，时间段的 `none` 指「该日期没有时段」，
 登录的 `error` 指「登录失败」，创建预约的 `conflict` 指「时段已被约走」，
-我的预约的 `error` 指「列表拉取失败」——用同一个键表达不了「详情正常但该日期时段为空」
-「资源正常但登录失败」「创建成功但列表拉取失败」这类组合，而端到端测试需要分别控制它们。
+我的预约的 `error` 指「列表拉取失败」，取消的 `not-found` 指「预约不存在或不属于本人」——
+用同一个键表达不了「详情正常但该日期时段为空」「资源正常但登录失败」
+「创建成功但列表拉取失败」「列表正常但取消失败」这类组合，而端到端测试需要分别控制它们。
 
 另有一个**数据键**（不是模式开关）：`CR_MOCK_BOOKINGS` 存放开发期已创建的预约
 （见 `services/mock-booking-store.ts`）。测试直接读它来核对「预约记录是否真的写进去了」，
@@ -243,3 +246,20 @@ Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，合计 `417` 项断言。
     于是「设了 `NODE_PATH` 却依然找不到模块」——很容易误判成环境变量没生效。
     判定方法：`Test-Path "$dir\package.json"`；修法：`npm install --prefix <隔离目录>
     miniprogram-automator@0.12.1` 重装。**不要**把 `node_modules` 建进 `tools/e2e/`。
+
+31. **带二次确认的操作，探针必须能分别模拟「确定」与「取消」。**（Phase 8 实测）
+    只会自动确认的探针测不到「用户点『再想想』时什么都不该发生」这条——
+    而它恰恰是二次确认存在的意义。`e2e-phase8.js` 的探针用 `mode` 控制回调：
+    `confirm` / `cancel` / `none`（不回调，模拟弹窗挂着）。切换模式只改 `spy.mode`，
+    不必重新安装探针。
+
+32. **改完预约数据后要留意「我的预约」当前停在哪一个页签。**（Phase 8 实测）
+    页签过滤是**本地行为**，写入一条 `PENDING` 预约却停在「已取消」页签时，
+    列表依然为空、渲染层根本没有卡片，后续「点第一张卡片进详情」会静默失败，
+    然后引发一连串误报。写数据前后先 `tapTab()` 切回目标页签。
+
+33. **`mp.evaluate()` 里调页面方法前先判方法是否存在。**（Phase 8 实测）
+    栈顶不是预期页面时 `current.onCancel is not a function` 会以
+    `Uncaught ...` 的形式**抛到连接层**，直接中断整轮测试、后续用例全部不执行。
+    一行 `if (typeof current.onXxx !== 'function') return {...}` 就能把
+    「一个前置失败」限制成「一条断言失败」。
