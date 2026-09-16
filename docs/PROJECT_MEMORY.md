@@ -21,11 +21,11 @@
 
 ## 2. Current Phase
 
-当前阶段：Phase 8 - 取消预约（已完成，E2E 实测 73/73 通过）
+当前阶段：Phase 9 - 小程序体验优化（已完成，E2E 实测 69/69 通过；真机验证未做，见 §10 第 14 条）
 
 当前任务：无
 
-下一阶段：Phase 9 - 小程序体验优化
+下一阶段：Phase 10 - 后端与数据层整理
 
 ## 3. Completed
 
@@ -154,15 +154,43 @@ Phase 8（取消预约）：
 - [x] 回归测试：Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、Phase 4 81/81、
   Phase 5 64/64、Phase 6 61/61、Phase 7 63/63 通过（八套合计 **490** 项）
 
+Phase 9（小程序体验优化）：
+- [x] 统一反馈层 `utils/feedback.ts`（新增）：`toastSuccess` / `toastError` / `toastInfo` /
+  `toastNavigateFailed` / `confirm(options): Promise<boolean>`；页面里不再有裸的
+  `wx.showToast` / `wx.showModal`，同类反馈的图标、时长、危险色只有一处定义
+- [x] Modal：`confirm()` Promise 化，`fail` 分支返回 `false`（安全方向）；
+  预约详情页新增 `confirming` 标记，与 `canceling` 分属「等待确认」与「请求中」两个阶段
+- [x] Toast：成功（`success`）/ 失败（`error`）/ 中性（`none`）三种形态 + 跳转失败统一文案，
+  停留时长统一 2000ms
+- [x] 下拉刷新：补齐「我的预约」页（`enablePullDownRefresh: true`）；
+  只重拉数据、不重置页签；异常路径（含未登录）同样收起刷新动画
+- [x] 必要缓存：`store/preference.ts`（新增，键 `CR_LAST_CATEGORY`）记住最近筛选条件，
+  优先级 **URL 参数 > 本地缓存 > 空（全部）**，非法值归一化为「全部」
+- [x] 屏幕适配：`.cr-page` 底部两段式 `env(safe-area-inset-bottom)`（避开全面屏手势条）；
+  全局 `backgroundTextStyle` 由 `light` 改 `dark`（浅色背景下拉圆点不可见）
+- [x] Empty State / Error State / 加载反馈：沿用 Phase 1 起的三个状态组件，
+  本阶段只统一文字反馈出口，未新增组件（骨架屏未引入，理由见
+  `docs/04_development_plan.md` 的 Phase 9 阶段边界）
+- [x] 页面返回刷新：沿用各页 `onShow` 自然刷新，不新增刷新标记（Phase 6 / 7 既定取舍）
+- [x] 静态检查：`tsc --noEmit` 0 错误
+- [x] 端到端测试：真实开发者工具中 69/69 通过（`tools/e2e/e2e-phase9.js`）
+- [x] 回归测试：Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、Phase 4 81/81、
+  Phase 5 64/64、Phase 6 61/61、Phase 7 63/63、Phase 8 73/73 通过（九套合计 **559** 项）
+- [ ] 真机测试：需开发者用开发者工具「预览」扫码在真机验证，AI 环境只能跑到模拟器
+  （见 §10 第 14 条，不由测试脚本代称通过）
+
 ## 4. In Progress
 
 暂无。
 
 ## 5. Next Tasks
 
-1. Phase 9：加载体验优化（骨架屏 / 按钮防抖 / 空态与错误态文案打磨）
-2. Phase 9：空状态与异常路径的统一呈现，以及交互细节（下拉刷新、触底加载）
-3. Phase 9：整体视觉与文案复核（技术设计 §8 的交互要求）
+1. Phase 10：后端与数据层整理（Controller / Service / Repository / MySQL、统一 API 响应、
+   基础异常处理、预约数据一致性），把开发期数据源开关 `USE_MOCK_DATA` 切到 `false` 接真实后端
+2. Phase 9 收尾（开发者侧）：真机测试 —— 用开发者工具「预览」扫码，重点看安全区适配
+   （`.cr-page` 底部 `env(safe-area-inset-bottom)`）与下拉刷新在真机上的表现
+3. Phase 11：补齐测试（真机测试、后端接口用例，含「只读/写自己的预约」这类权限用例）
+4. Phase 12：作品集整理，并统一补齐真实图片资源（`imageUrl` / `avatarUrl`）
 
 ## 6. Current Frontend State
 
@@ -258,6 +286,20 @@ AppID：`wxb97024eb0305368d`
 - **恢复策略**：凭证与用户信息**同时有效**才算已登录，否则回到未登录并清掉残留
   （避免「有 token 没用户信息」这种半残状态流到页面）
 
+偏好（`store/preference.ts`，Phase 9 新增）：需求 §4.9 / 技术设计 §9「只缓存必要数据」的落地
+- 键 `LAST_CATEGORY_STORAGE_KEY = 'CR_LAST_CATEGORY'`，存「最近一次浏览的资源分类」
+  （空串代表「全部」）；接口是 `getLastCategory()` / `saveLastCategory(category)`
+- 缓存的是「上次看的是哪一类」这个**事实**，而不是「用户偏好哪一类」这个**判断** ——
+  所以没有长期偏好逻辑、也没有「清除偏好」入口，用户换一次就跟着变
+- 读写全部 try/catch 静默兜底：筛选条件只是便利设施，它出问题不该把整个列表页挡在门外；
+  写入失败也只影响「下次进来回到全部」，本次浏览已经是正确的
+- **缓存优先级低于 URL 参数**（消费方见 `pages/resource-list`）：带 `category` 参数进入说明是
+  明确意图（从首页某个分类卡片点进来），必须以参数为准
+- 「存了空串」与「没存过」在缓存层无法区分，但两者**语义一致**（都是「全部」），
+  因此不做特殊处理 —— 只有端到端测试需要把它们分开（见 `tools/e2e/README.md` 第 34 条）
+- 不放进 `store/auth.ts`：登录态真源是模块级内存态、缓存只作冷启动恢复；筛选条件每次进页面
+  都要读，两者生命周期不同
+
 工具（`utils/`）：
 - `resource.ts`（Phase 2）：资源分类常量 `RESOURCE_TYPE_OPTIONS` 与 `getResourceTypeLabel()`
 - `resource.ts`（Phase 3 追加）：列表页筛选项 `RESOURCE_FILTER_OPTIONS`（首项「全部」，值为空串）、
@@ -286,6 +328,18 @@ AppID：`wxb97024eb0305368d`
     不会出现「列表说已结束、详情还能取消」。归属校验不在这里做（那是服务端的事）
   - 错误码为什么放在 utils：开发期数据源与真实接口层都要用它，放在任一侧都会形成循环依赖；
     本文件不 import 任何 services，依赖方向始终单向
+- `feedback.ts`（Phase 9）：统一的用户反馈出口
+  - `toastSuccess(title)` / `toastError(title)` / `toastInfo(title)`：分别是
+    `icon: 'success'` / `'error'` / `'none'`，停留时长统一 `TOAST_DURATION = 2000`
+  - `toastNavigateFailed()`：跳转失败的统一文案（`NAVIGATE_FAILED_TEXT = '页面跳转失败'`），
+    直接作为 `wx.navigateTo({ fail })` 的回调传入
+  - `confirm(options): Promise<boolean>`：把 `wx.showModal` 包成 Promise。
+    用户点确认为 `true`、点取消为 `false`；**弹窗弹不出来（`fail`）同样返回 `false`** ——
+    安全方向，绝不能把「框没弹出来」当成「用户同意了」。`danger: true` 时确认按钮用危险色
+    `#f5222d`（只有不可逆操作才配得上；退出登录这类可逆操作刻意不用）
+  - 为什么要有这一层：同类反馈散在多个页面里各写一遍，迟早出现「这页 `success` 图标、
+    那页 `none`」「这里 1500ms、那里 2000ms」。收敛到一处后，端到端可以逐页比对
+    `title` / `content` / `confirmColor` / `icon` / `duration`，某页偷偷「自己写一套」立刻暴露
 
 页面：
 - `pages/index`（Phase 2 完成，Phase 5 追加用户区）：真实首页，含顶部区域、4 个分类入口、
@@ -293,13 +347,18 @@ AppID：`wxb97024eb0305368d`
   Phase 5 在顶部加**用户区**（昵称 / 「未登录」+ 头像首字占位），点击进入登录页；
   用户区文案由 `onShow` 里的 `refreshUserBar()` 同步登录态，**既有的 `.hero__*` 结构未改动**
   （Phase 1 / Phase 2 的测试依赖它）
-- `pages/resource-list`（Phase 3 完成）：真实列表页，含分类筛选栏、`ResourceCard` 列表、
-  四态与下拉刷新。两个关键设计：
+- `pages/resource-list`（Phase 3 完成，Phase 9 记住最近筛选条件）：真实列表页，
+  含分类筛选栏、`ResourceCard` 列表、四态与下拉刷新。两个关键设计：
   1. **筛选栏是静态内容，不随四态变化**（与首页一致）——接口失败或结果为空时仍能切换分类，
      避免「一次请求失败就整页不可用」；
   2. **非法 `category` 归一化为「全部」而非错误态**——详情页缺少 `id` 就无事可做，
      但列表页的筛选条件不满足时页面依然可用，一个脏链接不该把功能全部挡掉。
   另：切换分类时比对请求发出时的 `category`，条件已变则丢弃该次过期响应。
+  Phase 9 起 `onLoad` 的分类取值改为 **URL 参数 > `getLastCategory()` > 空（全部）**，
+  并在定下本次值之后 `saveLastCategory(category)`——**带参数进入同样写缓存**，
+  因为「从首页点某个分类进来」也是一次浏览；不写就会出现「刚在列表里看过自习室，
+  回首页点『查看全部』却落回球场」。`onTapFilter` 在「点了当前分类」的提前 return 之后写缓存，
+  重复点击不产生多余写入；非法缓存值经 `normalizeResourceType()` 归一化为「全部」而不是错误态。
 - `pages/resource-detail`（Phase 4 完成，Phase 5 加登录门槛，Phase 6 接真实提交）：真实详情页，
   含图片 / 类型占位、资源信息、7 天日期条、`TimeSlot` 列表、选择时间与预约按钮。七个关键设计：
   1. **资源信息区与时间段区各自独立四态**——切换日期只重新请求时间段，两区共用一个状态会导致
@@ -314,16 +373,20 @@ AppID：`wxb97024eb0305368d`
   7. **客户端预校验不替代服务端校验**——只为「不用等一个来回就知道哪里不对」，
      「不得早于当前时间」这条尤其只能在提交那一刻重新判定。
   另：「有时段但全部不可预约」仍是 success（时段确实存在且要展示），只额外给一句提示。
-  Phase 5 起 `onSubmit` 未登录先 `wx.showModal` 引导，确认后跳登录页；登录返回后**已选时段仍在**
+  Phase 5 起 `onSubmit` 未登录先弹 `confirm()` 引导，确认后跳登录页；登录返回后**已选时段仍在**
   （`navigateBack` 复用原页面实例）。Phase 6 起已登录走真实提交：提交中按钮为「提交中…」且不可再点，
   成功 toast + 800ms 后跳转我的预约（跳转前清空已选时段，返回时 `onShow` 重新拉时段），
-  失败时页面内提示条 + toast 同时给出原因
-- `pages/login`（Phase 5 新增）：登录页，未登录时展示登录说明 + 错误区 +「微信一键登录」
-  （加载中为「登录中…」）；已登录时展示用户信息（昵称、用户 ID、头像首字占位）+「退出登录」
-  （二次确认）。`onShow` 调 `refresh()` 同步登录态；登录成功后 `wx.showToast` 再延迟约 600ms
-  `navigateBack` 返回来源页
+  失败时页面内提示条 + toast 同时给出原因。Phase 9 起本页 toast 与登录引导均走
+  `utils/feedback.ts`（`promptLogin` 改为 `await confirm(...)`，跳转失败的文案也由该层统一）
+- `pages/login`（Phase 5 新增，Phase 9 反馈统一）：登录页，未登录时展示登录说明 + 错误区 +
+  「微信一键登录」（加载中为「登录中…」）；已登录时展示用户信息（昵称、用户 ID、头像首字占位）+
+  「退出登录」（二次确认）。`onShow` 调 `refresh()` 同步登录态；登录成功后 `toastSuccess` 再延迟
+  约 600ms `navigateBack` 返回来源页。
+  Phase 9 起退出确认改用 `await confirm(...)`（原先只能写在 `wx.showModal` 的 `success` 回调里），
+  后续动作因此是一条直线；**「退出」按钮刻意不用危险色**——它是可逆的（再登一次就回来了），
+  与取消预约那种「原时段可能立刻被别人约走」的不可逆操作区别对待
 - `pages/my-bookings`（Phase 1 骨架，Phase 5 登录引导，Phase 7 接入真实列表）：
-  待使用 / 已完成 / 已取消三个状态页签 + `BookingCard` 列表 + 四态。五个关键设计：
+  待使用 / 已完成 / 已取消三个状态页签 + `BookingCard` 列表 + 四态。六个关键设计：
   1. **未登录时展示 `empty-state` 登录引导**（「登录后查看我的预约」+「去登录」）而不是空列表，
      且**连页签一起保留**——未登录用户看到三个页签再看到一句引导，比整页只剩一个按钮更清楚；
   2. **未登录不发起请求**：没有凭证时服务端无从判断身份，请求必然 401，
@@ -333,6 +396,10 @@ AppID：`wxb97024eb0305368d`
   4. **每次 `onShow` 都重新拉取**：预约状态会随时间和别处操作变化（取消、新增、时段过期），
      这一页是「我接下来要做什么」的入口，显示过期数据比多等半秒严重；
   5. **登录态失效时清掉本地登录态并引导重新登录**（与详情页提交时同一条原则）。
+  6. **下拉刷新只重拉数据、不重置页签**（Phase 9）：用户停在「已取消」页签时下拉，
+     期望是「刷新这一屏」而不是「跳回待使用」——页签是用户的选择，不该被刷新动作抹掉。
+     未登录时 `loadBookings()` 会立即返回，`onPullDownRefresh` 仍会走到
+     `wx.stopPullDownRefresh`：用户做了主动动作就一定要有回应，哪怕结论是「还是未登录」。
   三个 `.tabs__item` 与默认 `emptyText` 保持不变（Phase 1 测试依赖）
 - `pages/booking-detail`（Phase 1 骨架，Phase 7 接入数据，Phase 8 取消预约）：
   参数非法 → error 态；查不到该预约 → **empty 态**（请求本身成功了，重试没有意义，
@@ -350,6 +417,11 @@ AppID：`wxb97024eb0305368d`
   5. **失败分流**：网络异常保留按钮并把原因留在页面上（可原样重试）；
      查不到（`404001`）落到 empty 态；状态冲突（`409001`）重新拉详情刷成真实状态；
      登录态失效只提示
+  6. **「等待确认」与「请求进行中」是两个阶段，各自防重复**（Phase 9）：确认框 Promise 化后
+     `await` 期间 `canceling` 还没被置位，只靠它拦不住「连点两次弹出两个确认框」，
+     因此另设 `confirming` 字段
+  Phase 9 另把本页的二次确认与全部 toast 改走 `utils/feedback.ts`，
+  取消按钮的确认色由 `danger: true` 给出（不可逆操作的统一表示）
 
 组件：
 - 已创建：`loading-state`、`empty-state`（含操作事件）、`error-state`（含 `retry` 事件）
@@ -487,8 +559,8 @@ API 设计以：
    - 解析 `page.callMethod()` 调用 async 方法时，其返回的 Promise 无法被序列化；
      需要「触发页面方法并读状态」时，在同一次 `evaluate` 内先调用再读，可稳定捕获瞬时状态。
    - 现成可用的端到端脚本与说明见 `tools/e2e/`（Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、
-     Phase 4 81/81、Phase 5 64/64、Phase 6 61/61、Phase 7 63/63、Phase 8 73/73 通过，
-     合计 490 项）。
+     Phase 4 81/81、Phase 5 64/64、Phase 6 61/61、Phase 7 63/63、Phase 8 73/73、
+     Phase 9 69/69 通过，九套合计 559 项）。
 
 6. **模拟器的路由过渡必须先收尾再发下一次导航（Phase 3 实测，极易误判为产品缺陷）**：
    - `wx.navigateTo` / `wx.navigateBack` 的**栈顶路由更新很快，但整段过渡动画约 1.2 秒才
@@ -602,6 +674,27 @@ API 设计以：
     - 这条与 Phase 6「提交失败分流」是同一条原则：只有网络类值得原样重试，
       业务失败要用「让用户换个做法」来响应。
 
+14. **Phase 9 的「真机测试」未做（开发者侧待补）**：
+    - `docs/04_development_plan.md` 的 Phase 9 清单里列了真机验证，但它需要开发者用
+      开发者工具「预览」扫码到自己的手机上，**AI 环境只能跑到开发者工具的模拟器**。
+    - 因此本项在开发计划与 §3 里都保持未勾选，**明确标注、不由测试脚本代称通过**
+      （`docs/AGENTS.md` §13「无法测试时必须明确说明，不得声称测试通过」）。
+    - 顺延到 Phase 11，或在 Phase 9 收尾时由开发者补做。真机重点关注两处：
+      安全区适配（`.cr-page` 底部的 `env(safe-area-inset-bottom)` 是否真的让开了手势条）
+      与下拉刷新的手感与动画收起。
+    - 这是 Phase 9 唯一的未完成项；其余九项均已通过端到端测试验证。
+
+15. **Phase 9 的改动让 Phase 8 的一条断言过期（已修，属回归测试的正常收获）**：
+    - Phase 9 把二次确认 Promise 化后，预约详情页的防重复从「请求中」（`canceling`）
+      前移到「等待确认」（`confirming`）。`e2e-phase8.js` 里断言「连点两次时
+      `canceling === true`」的那条因此失败——但真正的保护（只弹一次确认框、只提示一次、
+      只落一条记录）三条断言全过。
+    - 修法是**改断言而不是改产品代码**：把它改成「进入了防重复状态」
+      （`confirming === true || canceling === true`）。断言实现细节会绑死重构空间，
+      断言用户可见的结论（次数、条数）才稳定。
+    - 说明：这类失败要**先分清「产品坏了」还是「断言过期了」**再动手；
+      Phase 9 改动前先跑一遍回归，正是为了把这种过期断言当场暴露出来。
+
 ## 11. Important Decisions
 
 采用：
@@ -673,10 +766,13 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
   「登录成功但预约时段已被别人约走」「创建成功但列表拉取失败」）。
 - 另有一个数据键（不是模式开关）：`CR_MOCK_BOOKINGS` 存开发期已创建的预约，
   见 `services/mock-booking-store.ts`。
+- 另有 `CR_LAST_CATEGORY`（Phase 9）：**不是开发期数据源的开关**，而是产品功能本身需要的
+  真实缓存（最近筛选条件），接真实后端后依然保留，见 §6 的 `store/preference.ts`。
 - 已定决策：**开发期数据源不提供 `imageUrl`、也不提供 `avatarUrl`**，因此详情页与资源卡片始终展示
   类型占位块、登录页头像用昵称首字占位。
-  这是为了让端到端测试不依赖网络图片。真实图片资源待 Phase 9（体验优化）/ Phase 12（作品集整理）
-  统一补齐，届时只需给 mock 数据或后端数据补 `imageUrl` / `avatarUrl`，页面代码无需改动。
+  这是为了让端到端测试不依赖网络图片。Phase 9（体验优化）**刻意没有顺手补图片**——
+  没有真实图片资源就无从知道真实尺寸，此时做出的骨架屏只能是假的；因此与图片一起留给 Phase 12。
+  届时只需给 mock 数据或后端数据补 `imageUrl` / `avatarUrl`，页面代码无需改动。
 - 已定决策（Phase 5）：**登录态的真源是 `store/auth.ts` 的模块级内存态**，本地缓存只作冷启动恢复用；
   不引入全局状态库（项目不使用 Redux / MobX 一类方案），页面在 `onShow` 从 `store` 取副本即可。
 - 已定决策（Phase 6）：**预约业务错误码沿用「HTTP 状态码 × 1000 + 序号」**
@@ -695,6 +791,25 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 - 已定决策（Phase 7）：**「已完成」由前端派生、服务端不写回**（详见 §10 第 11 条）。
 - 已定决策（Phase 7）：**预约详情不新增 `GET /api/bookings/{id}`，复用 `/bookings/my`**
   （详见 §10 第 10 条）。技术设计 §3 的接口清单未变。
+- 已定决策（Phase 9）：**所有用户反馈统一走 `utils/feedback.ts`，页面不再直接调
+  `wx.showToast` / `wx.showModal`**。理由不是「少写几行」，而是同类反馈散在多个页面里
+  各写一遍，早晚会出现图标、时长、确认色不一致；收敛到一处后「一致性」变成可断言的东西
+  （端到端逐页比对参数）。
+- 已定决策（Phase 9）：**危险色按「操作是否可逆」划分**。取消预约（原时段会被释放给别人）
+  用 `#f5222d`；退出登录（再登一次就回来）不用危险色。危险色一旦滥用就失去了警示作用。
+- 已定决策（Phase 9）：**`confirm()` 的 `fail` 分支返回 `false`**。
+  「弹窗弹不出来」与「用户点了取消」在结果上都不该执行后续动作，把前者当作后者是安全方向；
+  反过来（当成确认）会让用户在毫无提示的情况下被取消预约。
+- 已定决策（Phase 9）：**「等待确认」与「请求进行中」必须是两个独立的防重复标记**
+  （`confirming` / `canceling`）。确认框 Promise 化后 `await` 期间请求还没开始发，
+  只靠 `canceling` 拦不住连点，会弹出两个确认框。
+- 已定决策（Phase 9）：**最近筛选条件缓存的优先级是 URL 参数 > 缓存 > 空（全部）**，
+  且带参数进入也要写缓存（见 §6 `store/preference.ts` 与 `pages/resource-list`）。
+- 已定决策（Phase 9）：**下拉刷新只重拉数据、不重置页签**；且异常路径（含未登录）
+  同样要收起刷新动画 —— 用户主动做了动作就必须有回应，哪怕结论是「还是未登录」。
+- 已定决策（Phase 9）：**安全区的两段式写法必须拆成两条 CSS 声明**
+  （`padding: …; padding-bottom: calc(… + env(safe-area-inset-bottom, 0px))`）。
+  合成一条时，旧机型不支持 `env()` 会让整条 `calc` 失效，下内边距反而变成 0。
 
 当前不使用：
 - Redis
@@ -729,12 +844,14 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 ## 14. Last Updated
 
 更新时间：2026-09-16  
-最后完成任务：Phase 8 取消预约完成并通过端到端测试（真实开发者工具中 73/73 通过，
-Phase 1 ~ Phase 7 回归 36/36、47/47、65/65、81/81、64/64、61/61、63/63，八套合计 490 项）；
-实现 `DELETE /api/bookings/{id}` 前端接入（`cancelBooking` 与 `mockCancelBooking`）、
-`utils/booking.ts` 的 `canCancelBooking()`、预约表的 `updateMockBookingStatus()`、
-预约详情页的二次确认 / 取消中防重复 / 成功后状态更新与按钮消失 / 四类失败分流；
-验证「取消后时间段恢复可用」走真实路径（预约后 BOOKED → 取消后 AVAILABLE），
-并刻意「绕开 UI 直接调 performCancel」证明服务端状态校验是权威；
-新增第六个开发期模式键 `CR_MOCK_CANCEL_MODE`，技术设计 §3 规划的接口至此全部被前端调用  
+最后完成任务：Phase 9 小程序体验优化完成并通过端到端测试（真实开发者工具中 69/69 通过，
+Phase 1 ~ Phase 8 回归 36/36、47/47、65/65、81/81、64/64、61/61、63/63、73/73，九套合计 559 项）；
+新增 `utils/feedback.ts`（toast 三态统一 + `confirm()` Promise 化 + 危险色）与
+`store/preference.ts`（最近筛选条件缓存，优先级 URL 参数 > 缓存 > 空），
+把 6 个页面里散落的 `wx.showToast` / `wx.showModal` 全部收敛到反馈层；
+预约详情页新增 `confirming`，与 `canceling` 分属「等待确认」「请求中」两个阶段各自防重复；
+「我的预约」补下拉刷新（只重拉数据、不重置页签，未登录等异常路径同样收起刷新动画）；
+`.cr-page` 底部改两段式 `env(safe-area-inset-bottom)`、全局 `backgroundTextStyle` 改 `dark`；
+静态检查 `tsc --noEmit` 0 错误。
+**真机测试未做**：需开发者用「预览」扫码，AI 环境只能跑到模拟器，见 §10 第 14 条（Phase 9 唯一未完成项）  
 更新者：Developer（AI 协同）
