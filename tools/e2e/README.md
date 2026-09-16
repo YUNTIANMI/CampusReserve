@@ -39,13 +39,44 @@ node ./e2e-phase9.js ws://127.0.0.1:9420   # Phase 9：统一反馈层、筛选�
 
 也可以用 npm 脚本：`npm run auto` / `npm run phase1` … `npm run phase9`。
 
+### 小程序 ↔ 真实后端联通实测（Phase 10 起）
+
+```bash
+node ./e2e-real-backend.js ws://127.0.0.1:9420 <预置预约id>
+```
+
+这一套与前九套**验证的是不同的东西**，不能互相替代：
+
+| | 证明什么 | 数据来源 |
+| --- | --- | --- |
+| `e2e-phase1..9.js` | 页面与交互是对的（含各失败分支） | 开发期本地数据源（`USE_MOCK_DATA = true`） |
+| `e2e-real-backend.js` | **小程序真的在通过 HTTP 读写后端** | 真实后端 + MySQL |
+| `../api-test/api-phase10.js` | 后端接口本身是对的（不经过小程序） | 真实后端 + MySQL |
+
+前置条件（缺一不可）：
+1. 后端已连 MySQL 启动（默认 `http://127.0.0.1:8080`），启动时需注入 `CR_DB_PASSWORD`
+   （公开仓库不写口令，缺了会直接 `Access denied ... (using password: NO)`）
+2. `CampusReserve/services/config.ts` 的 `USE_MOCK_DATA` 置为 **`false`**
+   ——**这是临时切换，跑完必须改回 `true`**，否则前九套回归会失效
+3. 开发者工具「详情 → 本地设置」勾选「不校验合法域名…」（本地 http 回环地址必需）
+4. 自动化模式已启动（`node ./start-automation.js`）
+5. 先用 HTTP 为该用户预置一条预约，把 id 作为参数传进来。
+   小程序里 `wx.login` 拿到的 code 经后端降级映射到固定开发用户，因此用任意非 `dev:` 开头的
+   code 登录得到的正是**同一个用户**——「小程序里能看到这条预约」因此在证明
+   「服务端按凭证过滤归属」这件事。
+
+核心手法是**反证数据来源**：把 `CR_MOCK_MODE` 置为 `'empty'`（mock 被明确要求返回空）后，
+列表仍渲染出 8 条后端种子资源，才证明数据只可能来自 HTTP。
+这比「看到数据就算通」强得多——后者在 `USE_MOCK_DATA` 忘关时会给出假阳性。
+
 `start-automation.js` 会自动定位开发者工具 CLI（可用命令行参数或 `WX_DEVTOOLS_CLI` 环境变量覆盖），
 并把工程根指向 `../../CampusReserve`。
 
 退出码 `0` 表示全部通过，输出末行为 `E2E_TEST = PASS`。
 当前通过情况：Phase 1 `36/36`，Phase 2 `47/47`，Phase 3 `65/65`，Phase 4 `81/81`，
-Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，Phase 8 `73/73`，Phase 9 `69/69`，
-合计 `559` 项断言。
+Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，Phase 8 `73/73`，Phase 9 `69/69`
+（九套合计 `559` 项），Phase 10 联通实测 `28/28`，
+后端接口实测见 `../api-test/api-phase10.js`（`76/76`）。
 
 > Phase 1 的脚本自 Phase 3 起会先清除 `CR_MOCK_MODE`：`resource-list` 已接入真实数据源，
 > 不固定数据源模式就无法确定性断言。Phase 1 脚本对该页只覆盖「Phase 1 交付物」
@@ -99,10 +130,14 @@ Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，Phase 8 `73/73`，Phase 9 
    - **`selectAllComponents()` 不可用于计数**：在 automator 的 evaluate 上下文中它恒返回 `0`，
      连 `.hero__action` 这类普通 `view` 也是 0，实测无效。
 
-4. **不要使用 `mp.reLaunch()`。**
-   页面被销毁时 automator 内部会直接解构 `getPageMetaByWebviewId(...)` 的返回值，
-   该值为 `null` 时整条连接抛错、测试中断。需要重新加载页面时，改为调用页面自身的方法
-   （如首页的 `loadResources()`）。
+4. **不要使用 `mp.reLaunch()`；但 `mp.evaluate(() => wx.reLaunch(...))` 可用且有时必需。**
+   前者（automator 的包装）在页面被销毁时会直接解构 `getPageMetaByWebviewId(...)` 的返回值，
+   该值为 `null` 时整条连接抛错、测试中断，**且它不接受任何参数之外的用法**。
+   需要**重建页面栈**时（例如上一轮把页面留在了登录页），走 appservice 里的 `wx.reLaunch`
+   才是可靠手段，见 `e2e-real-backend.js` 的 `resetToHome()`。
+   注意代价：它会销毁页面，因此**不能**用它代替「返回上一页」（那样来源页的 `onShow` 刷新
+   与页面参数都会丢，见第 12 条）。
+   在旧脚本里需要重新加载当前页时，更轻的做法仍是调页面自身的方法（如首页的 `loadResources()`）。
 
 5. **路由断言读 appservice 的真实页面栈，不要依赖 `mp.currentPage().path`。**
    后者取自 automator 内部维护的 pageStack，在刚 `navigateBack` 后可能与真实状态不同步，
@@ -299,3 +334,27 @@ Phase 5 `64/64`，Phase 6 `61/61`，Phase 7 `63/63`，Phase 8 `73/73`，Phase 9 
     （`confirming === true || canceling === true`）。
     断言实现细节会绑死重构空间；断言用户可见的结论（次数、条数）才稳定。
     这类失败是回归测试的正常收获，先分清「产品坏了」还是「断言过期了」再动手。
+
+39. **登录页成功后会自动返回上一页，别抢在它前面导航。**（Phase 10 实测，一次误报 6 项）
+    登录页在登录成功后会 `setTimeout(() => navigateBack({ delta: 1 }), BACK_DELAY)`
+    自己返回来源页（约 600ms）。`wx.navigateBack` 弹掉的是**调用那一刻的栈顶**——
+    若你在它触发前就压入新页面（例如刚读到「已登录」立刻 `navigateTo` 到「我的预约」），
+    这个迟到的返回弹掉的就是**你的新页面**，栈顶又回到登录页，
+    表现为「D 组全部失败、detail 全是 `pages/login/login`」。
+    正确做法：断言登录成功之后，**先轮询等它自己离开登录页再导航**，
+    见 `e2e-real-backend.js` 的 `waitUntilNotPath(mp, LOGIN)`（对应 C4 步骤）。
+    同类陷阱：**只断言「离开登录页」还不够，还要再等一段过渡收尾**，
+    否则下一次导航仍可能撞在过渡窗口上（见第 11 条）。
+
+40. **连续跑多轮自动化后，模拟器的「路由过渡」会冻死，`wx.reLaunch` 回调一直停在 `pending`。**
+    （Phase 10 实测，一次误报 4 项）现象很隐蔽：`getCurrentPages()` 仍能读到页面栈
+    （例如卡在 `[index, resource-list, resource-detail, login]`），但
+    `mp.navigateTo()` 报 `timeout waiting for automator response`，
+    appservice 里带 `success`/`fail` 回调的 `wx.reLaunch` **两个回调都不触发**。
+    这与第 11 条（测试节奏造成的 ~10 秒卡顿）**不是一回事**，也重启不了自己、
+    只能重建会话：`cli.bat close` 后重跑 `node ./start-automation.js`。
+    实测重建后页面栈变成干净的 `[index]`、`reLaunch` 立即返回 `ok`。
+    判别手法（已固化进脚本）：给 `wx.reLaunch` 挂回调并读回结果，
+    `'pending'` 即冻结。`e2e-real-backend.js` 的 `resetToHome()` 会主动做这个探测，
+    冻结时**抛出一条写明解法的错误**，而不是让后续断言退化成一堆 `null`
+    （那样最难定位——看起来像脚本写错了）。

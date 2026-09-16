@@ -329,7 +329,7 @@
 - [x] 页面返回刷新
 - [x] 必要缓存
 - [x] 屏幕适配
-- [ ] 真机测试（需开发者用开发者工具「预览」扫码在真机验证，AI 环境只能跑到模拟器）
+- [x] 真机测试（2026-09-16 由开发者用开发者工具「预览」扫码在真机上完成，未发现明显问题）
 
 验收：
 核心流程无明显交互问题。
@@ -372,9 +372,11 @@
   一旦不被支持，整个 `calc` 会失效，反而把下内边距变成 0，比不写更糟。
   全局 `backgroundTextStyle` 由 `light` 改为 `dark`：背景是浅灰（`#f5f6f8`），
   浅色下拉圆点在浅底上看不见。
-- **真机测试未做**：`04` 原计划里列了真机验证，但它需要开发者用开发者工具「预览」扫码到自己的
-  手机上，AI 环境只能跑到模拟器。**在此明确说明，不由测试脚本代称通过**；
-  真机验证顺延到 Phase 11，或在 Phase 9 收尾时由开发者补做。
+- **真机测试已由开发者完成**（2026-09-16）：开发者用开发者工具「预览」扫码到真机，验证核心流程
+  无明显问题。这一项 AI 环境做不到（只能跑到模拟器），因此此前一直留空；本次由开发者亲自补做并确认。
+  真机与模拟器的差异点仍值得留意：`baseUrl` 指向电脑局域网 IP 而非 `127.0.0.1`、
+  `env(safe-area-inset-bottom)` 才真正生效、机型 `wx.*` API 版本差异——这些在 Phase 11 的
+  真实后端回归里继续覆盖。
 
 阶段边界（刻意留在后续阶段）：
 - 真实图片资源（`imageUrl` / `avatarUrl`）仍不提供，占位方案沿用，属 Phase 12
@@ -385,16 +387,79 @@
 
 # Phase 10：后端与数据层整理
 
-- [ ] Controller
-- [ ] Service
-- [ ] Repository
-- [ ] MySQL
-- [ ] 统一 API 响应
-- [ ] 基础异常处理
-- [ ] 预约数据一致性
+- [x] Controller
+- [x] Service
+- [x] Repository
+- [x] MySQL
+- [x] 统一 API 响应
+- [x] 基础异常处理
+- [x] 预约数据一致性
 
 验收：
 小程序核心业务可依赖真实后端运行。
+
+验收结论（2026-09-16 实测）：
+- **两套独立验证，合计 104 项断言全绿**，因为「后端能跑」与「小程序真的在用这个后端」
+  是两件事，互相不能替代：
+  - `tools/api-test/api-phase10.js` —— 直接打 HTTP 的后端接口实测 **76/76**
+    （连通性 / 登录鉴权 / 资源列表与详情 / 可用时段 / 创建 / 我的预约 / 取消 / 并发 / 收尾 / 兜底）
+  - `tools/e2e/e2e-real-backend.js` —— 小程序 ↔ 真实后端联通实测 **28/28**
+    （走真实 `wx.login` → `POST /api/auth/login` → 读列表 / 详情 / 我的预约 → 取消写回）
+- **九套 mock 回归不受影响**：`services/config.ts` 的 `USE_MOCK_DATA` 在本阶段**保持 `true`**，
+  回归因此不依赖后端进程是否在跑，Phase 1 ~ Phase 9 的 559 项断言继续全绿。
+  切到真实后端是 Phase 11 的工作（联通实测期间临时置 `false`，按约定已改回）。
+- **反证数据来源**，而不是「看到数据就算通」：联通实测把开发期数据源的模式键 `CR_MOCK_MODE`
+  置为 `'empty'`（mock 被明确要求返回空），列表仍渲染出 8 条后端种子资源，
+  才证明数据只可能来自 HTTP。否则在 `USE_MOCK_DATA` 忘关时会给出假阳性。
+- **数据库三张表**（`docs/03_database_design.md`）：`user` / `resource` / `booking`。
+  建表与种子数据走 `classpath:db/schema.sql` + `data.sql`，写成幂等形态
+  （`IF NOT EXISTS` / `INSERT IGNORE`），`mode: always` 可反复启动不重复不覆盖；
+  JDBC URL 带 `createDatabaseIfNotExist=true`，新机器首次启动即可用。
+  **脚本必须显式指定 `spring.sql.init.encoding: UTF-8`**——不指定时 Spring 按平台默认编码读，
+  在中文 Windows 上会按 GBK 解读，种子资源的中文名称直接乱码入库。
+- **统一响应体 `ApiResponse<T>`（code / message / data）+ 全局异常处理**：
+  业务失败一律由 **HTTP 200** 承载并把语义放在 `code` 里，只有「未登录 / 登录态失效」用 **HTTP 401**。
+  这样前端 `request.ts` 只有一条判断路径（先看 HTTP，再看 code），
+  不用为每个接口记住「哪种错是 4xx 哪种是 2xx」。
+  错误码统一 `HTTP 状态码 × 1000`：`400001` 参数 / `400002` 非法时间 / `401001` 未登录 /
+  `401002` 登录失败 / `404001` 资源或预约不存在 / `409001` 时段冲突 / `500000` 服务端异常。
+  `GlobalExceptionHandler` 把 `BizException`、数据库唯一约束冲突、入参形状问题、
+  `NoResourceFoundException` 分别翻译成上述码，并**不向客户端泄漏堆栈**。
+- **预约数据一致性靠数据库兜底，而不是只靠 Service 判断**：
+  `booking.active_slot_key` 是**生成列（STORED）+ 唯一索引**，
+  `CANCELLED` 时求值为 `NULL`（MySQL 唯一索引不约束 NULL，取消后即可重新预约）。
+  于是「同一资源 + 同一日期 + 同一起始时刻只能有一条有效预约」是数据库层面的硬约束：
+  Service 先查一次只为给出友好文案，真正的并发防线在唯一索引。
+  端到端用 8 条并发抢同一时段验证——7 条被唯一索引拦下并翻译成 `409001`，恰好 1 条成功。
+- **取消只改状态、绝不改动记录本身**（编号与创建时间保持不变）：预约记录是用户的历史凭证，
+  删行会让「我的预约」里那条凭空消失，用户无法区分「我取消了」和「系统把它弄丢了」。
+- **可用时间段是合成出来的**，不是存表：`resource.open_slots`（CSV `HH:mm-HH:mm`）生成骨架
+  → 叠加 `booking` 表中非 `CANCELLED` 的记录标 `BOOKED` → 当前时刻之前的时段标 `DISABLED`
+  （优先级最高）。因此取消预约**不需要任何清理动作**，时段自动恢复可用。
+- **微信登录双模式、自动降级**（`WeChatClient.isConfigured()`）：配了
+  `CR_WECHAT_APPID` / `CR_WECHAT_SECRET` 就走真实 `code2session`；未配置时由 code 派生
+  本地用户映射（固定开发用户 `dev-user`），**同一份代码两条路径**，不用改配置开关。
+- **登录 token 是 HMAC-SHA256 签名的自包含令牌**（三段式 `header.payload.signature`，Base64URL）：
+  不引入 Redis、不加会话表，因此可以守住「只有三张核心表」的约束；
+  代价是**主动失效做不了**（只能等过期，默认 720 小时），已记入 `PROJECT_MEMORY.md`。
+  密钥未配置时每次启动随机生成并打印警告——比在公开仓库里写死默认密钥安全，
+  代价是重启会让既有登录态失效（开发期可接受）。
+- **口令不进公开仓库**：`application.yml` 的数据源口令默认留空、`cr.*` 凭据默认留空，
+  全部由环境变量注入（`CR_DB_PASSWORD` / `CR_TOKEN_SECRET` / …）。
+  联通实测期间因此必须显式注入 `CR_DB_PASSWORD`，否则启动即因
+  `Access denied for user 'root'@'localhost' (using password: NO)` 失败。
+
+已知问题（记入 `PROJECT_MEMORY.md`）：
+- **真实 `code2session` 未实测**：本机没有配置微信 AppSecret，联调全程走的是降级路径。
+  真实调用只在换到有凭据的环境时才会第一次被执行。
+- **模拟器自动化会话会「路由过渡冻结」**：跨脚本存活的会话在若干次导航后，
+  `wx.reLaunch` 回调会一直停在 `pending`、页面栈不再变化。这是测试环境现象而非产品缺陷，
+  解法是 `cli.bat close` 后重跑 `tools/e2e/start-automation.js`。
+  验证脚本已把这一状态**显式识别并抛出可执行的提示**，不再退化成一堆 null 断言。
+
+阶段边界（刻意留在后续阶段）：
+- 切换到真实后端（`USE_MOCK_DATA = false`）与真实后端的完整回归（含各失败分支）属 Phase 11
+- 真实图片资源、生产部署与鉴权加固（refresh token / 主动失效）属 Phase 12
 
 ---
 

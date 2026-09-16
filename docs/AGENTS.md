@@ -51,7 +51,7 @@ docs/
 ├── 02_technical_design.md    # 技术设计、规范与约束
 ├── 03_database_design.md     # 数据库设计（Phase 10 创建）
 ├── 04_development_plan.md    # 开发阶段
-├── 05_api_contract.md        # API 契约（首次实现 API 前创建）
+├── 05_api_contract.md        # API 契约（Phase 10 创建）
 ├── AGENTS.md                 # AI 协同开发规范（本文件）
 └── PROJECT_MEMORY.md         # 当前状态
 ```
@@ -214,6 +214,18 @@ Repository：
 
 禁止 Controller 直接访问数据库。
 
+分层内的既定约束（Phase 10 落地，详见 `docs/05_api_contract.md`）：
+- Controller 只做接参与包响应体，**不写业务判断**；响应体恒为 `ApiResponse`（code / message / data）
+- **业务失败一律 HTTP 200**，语义放在 `code`；**只有未登录 / 登录态失效用 HTTP 401**
+- 错误码统一 `HTTP 状态码 × 1000`（`400001` 参数 / `400002` 非法时间 / `401001` 未登录 /
+  `401002` 登录失败 / `404001` 不存在 / `409001` 时段冲突 / `500000` 服务端异常）
+- 抛 `BizException` 表达业务失败，**不要在 Service 里手写 `ApiResponse`**；
+  异常到响应码的翻译只在 `GlobalExceptionHandler` 一处发生，且**不向客户端泄漏堆栈**
+- 需要登录的接口用 `@CurrentUser Long userId` 取身份，**入参不含 userId**
+- 涉及并发的唯一性（例如同一时段只能有一条有效预约）必须有**数据库层约束兜底**，
+  Service 里的预检查只负责给出友好文案
+- 口令与凭据一律环境变量注入，`application.yml` 里默认留空（公开仓库）
+
 ---
 
 ## 11. Booking Rules
@@ -268,6 +280,28 @@ node ./e2e-phase7.js                # Phase 7：我的预约、状态派生与�
 node ./e2e-phase8.js                # Phase 8：取消预约、二次确认、状态更新、时间段恢复、失败分流
 node ./e2e-phase9.js                # Phase 9：统一反馈层、筛选条件缓存、下拉刷新与安全区适配
 ```
+
+后端接口实测（不依赖小程序，直接打 HTTP）：
+```bash
+node ./tools/api-test/api-phase10.js            # Phase 10：76 项，含 8 条并发抢同一时段
+```
+
+小程序 ↔ 真实后端联通实测（Phase 10 起）：
+```bash
+# 前置：后端已连 MySQL 启动；本文件所在工程为 tools/e2e
+#       services/config.ts 的 USE_MOCK_DATA 置为 false（跑完改回 true）
+#       并已 node ./start-automation.js
+node ./e2e-real-backend.js ws://127.0.0.1:9420 <预置预约id>
+```
+它证明的是「**小程序真的在通过 HTTP 读写这个后端**」——与「后端接口本身是对的」是两件事，
+不能互相替代。核心手法是**反证**：把 `CR_MOCK_MODE` 置成 `empty`（mock 被要求返回空）后
+列表仍渲染出 8 条后端种子资源，才能排除 mock 忘关造成的假阳性。
+
+**后端联通测试的已知环境陷阱**：自动化会话跨脚本存活，若上一轮把**登录页**留在页面栈里，
+登录页那个「成功后延迟返回」的定时器会弹掉随后压入的新页面；连续几轮后模拟器的
+**路由过渡会冻结**（`wx.reLaunch` 回调一直停在 `pending`）。解法是 `cli.bat close` 后重跑
+`start-automation.js`；脚本侧必须**等登录页自己离开再导航**。
+两种现象都会在日志里明说，不要靠猜——详见 `tools/e2e/README.md`。
 
 测试脚本编写的硬约束（选择器无法穿透自定义组件、`page.xpath()` 的占位返回与谓词能力、
 不可使用 `reLaunch`、路由断言须读 appservice 页面栈、**导航之间必须等过渡收尾**、

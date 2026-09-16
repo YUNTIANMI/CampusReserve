@@ -21,11 +21,12 @@
 
 ## 2. Current Phase
 
-当前阶段：Phase 9 - 小程序体验优化（已完成，E2E 实测 69/69 通过；真机验证未做，见 §10 第 14 条）
+当前阶段：Phase 10 - 后端与数据层整理（已完成。后端接口实测 76/76、小程序↔真实后端联通实测 28/28，
+九套 mock 回归 559 项继续全绿；`USE_MOCK_DATA` 按约定保持 `true`，Phase 11 再切）
 
 当前任务：无
 
-下一阶段：Phase 10 - 后端与数据层整理
+下一阶段：Phase 11 - 测试（小程序端与后端的完整回归，含切到真实后端）
 
 ## 3. Completed
 
@@ -176,8 +177,23 @@ Phase 9（小程序体验优化）：
 - [x] 端到端测试：真实开发者工具中 69/69 通过（`tools/e2e/e2e-phase9.js`）
 - [x] 回归测试：Phase 1 36/36、Phase 2 47/47、Phase 3 65/65、Phase 4 81/81、
   Phase 5 64/64、Phase 6 61/61、Phase 7 63/63、Phase 8 73/73 通过（九套合计 **559** 项）
-- [ ] 真机测试：需开发者用开发者工具「预览」扫码在真机验证，AI 环境只能跑到模拟器
-  （见 §10 第 14 条，不由测试脚本代称通过）
+- [x] 真机测试：**2026-09-16 由开发者用开发者工具「预览」扫码在真机上完成，未发现明显问题**
+  （原先由 AI 保留未勾选，见 §10 第 14 条）
+
+Phase 10（后端与数据层整理）：
+- [x] Controller / Service / Repository：三层齐备（`AuthController` / `ResourceController` /
+  `BookingController`，三个 Service，三个 JPA Repository）
+- [x] MySQL：`campusreserve` 库 + `user` / `resource` / `booking` 三表，
+  幂等建表脚本与 8 条种子资源（见 §8）
+- [x] 统一 API 响应：`ApiResponse<T>`（code / message / data），业务失败恒 HTTP 200
+- [x] 基础异常处理：`BizException` + `GlobalExceptionHandler`，错误码统一「HTTP 状态码 × 1000」
+- [x] 预约数据一致性：`booking.active_slot_key` 生成列 + 唯一索引兜住并发（见 §8）
+- [x] 可用时间段合成：`resource.open_slots` 生成骨架 + booking 叠加 BOOKED + 当前时间标 DISABLED
+- [x] 微信登录：双模式自动降级（配了 AppSecret 走真实 `code2session`，否则由 code 派生本地用户）
+- [x] 登录 token：HMAC-SHA256 签名自包含令牌，不引入 Redis / 会话表
+- [x] 后端接口实测：**76/76 通过**（`tools/api-test/api-phase10.js`）
+- [x] 小程序 ↔ 真实后端联通实测：**28/28 通过**（`tools/e2e/e2e-real-backend.js`）
+- [x] 九套 mock 回归不受影响：`USE_MOCK_DATA` 保持 `true`，559 项断言继续全绿
 
 ## 4. In Progress
 
@@ -185,9 +201,9 @@ Phase 9（小程序体验优化）：
 
 ## 5. Next Tasks
 
-1. Phase 10：后端与数据层整理（Controller / Service / Repository / MySQL、统一 API 响应、
-   基础异常处理、预约数据一致性），把开发期数据源开关 `USE_MOCK_DATA` 切到 `false` 接真实后端
-2. Phase 9 收尾（开发者侧）：真机测试 —— 用开发者工具「预览」扫码，重点看安全区适配
+1. Phase 11：测试 —— 把 `USE_MOCK_DATA` 切到 `false` 接真实后端，重跑九套端到端回归，
+   覆盖各失败分支（时段冲突 / 资源不存在 / 参数非法 / 登录态失效 / 网络异常）
+2. Phase 11 前可选：为 `backend/` 补单元测试（当前只有上下文加载冒烟测试）
    （`.cr-page` 底部 `env(safe-area-inset-bottom)`）与下拉刷新在真机上的表现
 3. Phase 11：补齐测试（真机测试、后端接口用例，含「只读/写自己的预约」这类权限用例）
 4. Phase 12：作品集整理，并统一补齐真实图片资源（`imageUrl` / `avatarUrl`）
@@ -441,31 +457,66 @@ AppID：`wxb97024eb0305368d`
 ## 7. Current Backend State
 
 工程根目录：`backend/`  
-Spring Boot 3.5.16 + Java 17 + Maven（自带 `mvnw`）
+Spring Boot 3.5.16 + Java 17 + Maven（自带 `mvnw`）+ JPA（Hibernate 6.6）+ MySQL 8.4
 
-已完成：
+已完成（Phase 10）：
 - `CampusReserveApplication` 启动类
-- `common/ApiResponse.java`（统一响应体，对应技术设计 §13）
-- `controller/HealthController.java`（`GET /api/health`，仅用于启动与连通性验证，非业务接口）
-- `application.yml`
+- `common/`：`ApiResponse.java`（统一响应体）、`ErrorCode.java`（错误码常量）、
+  `BizException.java`（带 code + httpStatus 的业务异常）、`GlobalExceptionHandler.java`
+  （`@RestControllerAdvice` 统一翻译异常）、`TimeFormats.java`（`yyyy-MM-dd` / `HH:mm` 解析）
+- `config/`：`CrProperties.java`（`cr.*` 配置）、`WebConfig.java`（注册拦截器与参数解析器）
+- `security/`：`TokenService.java`（HMAC-SHA256 签发/校验三段式令牌）、`AuthInterceptor.java`、
+  `CurrentUser.java` + `CurrentUserArgumentResolver.java`（`@CurrentUser Long userId` 注入）
+- `entity/`：`UserEntity` / `ResourceEntity` / `BookingEntity` + `ResourceType` / `BookingStatus` 枚举
+- `repository/`：三个 Spring Data JPA 接口
+- `dto/`：登录、资源、时段、可用时段、创建预约、预约等请求/响应对象（Bean Validation + `@JsonFormat`）
+- `service/`：`AuthService`（登录事务 + 双模式）、`WeChatClient`（code2session，未配凭证自动降级）、
+  `ResourceService`（列表/详情/可用时段合成）、`BookingService`（创建/我的/取消 + 六条校验顺序）
+- `controller/`：`AuthController` / `ResourceController` / `BookingController`（均为薄 Controller，
+  只做接参与包响应体）与 `HealthController`（非业务，`GET /api/health`）
+- `resources/db/schema.sql` + `db/data.sql`（幂等建表与种子数据，见 §8）
+- `application.yml`（数据源、`spring.sql.init`、JPA、`cr.*`；口令与凭据全部留空由环境变量注入）
 - `CampusReserveApplicationTests`（上下文加载冒烟测试，已通过）
-
-尚未建立（Phase 10）：
-- `service/` `repository/` `entity/` `dto/` 包
-- 数据源配置与 `mysql-connector-j` 依赖
-- 业务 API
 
 启动与验证：
 ```bash
 cd backend
+# 数据源口令必须注入（公开仓库不写口令），否则启动即 Access denied
+$env:CR_DB_PASSWORD = '***'          # PowerShell
 ./mvnw spring-boot:run
 # GET http://localhost:8080/api/health
 # {"code":0,"message":"success","data":{"status":"UP","service":"campusreserve-backend"}}
 ```
 
+接口实测与联通实测见 §9。
+
 ## 8. Current Database State
 
-项目数据库 `campusreserve` 尚未创建（Phase 10 创建）。
+项目数据库 `campusreserve` 已创建（Phase 10），位于实例 `127.0.0.1:3308`。
+
+三张表（结构以 `docs/03_database_design.md` 为准）：
+- `user` —— 微信用户（`open_id` 唯一，昵称缺省「校园用户」）
+- `resource` —— 可预约资源（含 `type` 分类、`open_slots` CSV 时段骨架）
+- `booking` —— 预约记录（`status`，且包含下面的生成列）
+
+关键设计：
+- `booking.active_slot_key` 是**生成列（STORED）+ 唯一索引**：
+  非 `CANCELLED` 时求值为 `resource_id|booking_date|HH:mm`，`CANCELLED` 时为 `NULL`
+  （MySQL 唯一索引不约束 NULL）。由此「同一资源 + 同一日期 + 同一起始时刻
+  只能有一条有效预约，取消后可再约」成为数据库层面的硬约束。
+  **取消只改 `status`，编号与创建时间必须不变**（预约记录是用户的历史凭证）。
+- 建表与种子数据走 `classpath:db/schema.sql` + `db/data.sql`，幂等形态
+  （`IF NOT EXISTS` / `INSERT IGNORE`），`spring.sql.init.mode: always` 可反复启动；
+  JDBC URL 带 `createDatabaseIfNotExist=true`，新机器首次启动即可用。
+- **`spring.sql.init.encoding: UTF-8` 必须显式指定**：不指定时 Spring 按平台默认编码读脚本，
+  在中文 Windows 上按 GBK 解读，种子资源的中文名称会直接乱码入库。
+- 种子数据 8 条资源，id 1~8 **与 `services/mock-resource.ts` 的 `MOCK_RESOURCES` 逐字段对齐**，
+  这样 mock 回归与真实后端联通实测能核对同一个名字（`图书馆三楼自习室 A`）。
+
+当前库内数据（2026-09-16 联通实测后）：
+- `resource` 8 条（种子）
+- `user` 3 条（`dev-user`，以及接口实测用的 `dev-api-test-a` / `dev-api-test-b`）
+- `booking` 已清空（测试期产生的 6 条预约已全部删除，Phase 11 从干净状态开始）
 
 已实测确认的环境：
 - MySQL **8.4.10**
@@ -474,39 +525,49 @@ cd backend
 - 配置文件：`E:\MySQL Server 8.4\mysql8\my.ini`
 - 数据目录：`E:\MySQL Server 8.4\mysql8\Data`
 - root 账号密码已由开发者提供，**连接实测通过**（可执行 `SELECT VERSION()` 与 `SHOW DATABASES`）
+- 命令行客户端可用：`D:\MySQL\mysql-8.4.3-winx64\bin\mysql.exe`（仅用其客户端连 3308，
+  不要用它所在目录那个 3306 实例，见下）
 
 注意：
 - 该实例为**多项目共用实例**，已存在其他项目的库（`user_db`、`product_db`、`order_db`、`pay_db`、`stock_db`、`luoji_blog` 等）。本项目**只能操作 `campusreserve` 库**，不得改动其他库。
 - 本机另一实例（端口 3306，安装于 `D:\MySQL\mysql-8.4.3-winx64`）的 root 账号使用 `mysql_native_password`，该插件在 MySQL 8.4 中默认未加载，**无法连接，本项目不使用**。
 - 仓库为公开仓库，**数据库口令不写入任何被 Git 跟踪的文件**；凭据存放于本地未跟踪的工作区记忆中。
-
-数据库设计以：
-`docs/03_database_design.md`
-为准；该文档尚未建立，在首次数据库实现前创建。
+- `mysql.exe` 输出到 PowerShell 时中文会显示为乱码（`鏍″洯鐢ㄦ埛`）：那是控制台按 GBK 解码 UTF-8 的
+  假象，库内内容是正确的 UTF-8。
 
 ## 9. Current API State
 
-仅有一个非业务的健康检查接口：`GET /api/health`。
+业务 API 已全部实现（Phase 10），技术设计 §3 的接口清单**已闭环**，后续阶段不再新增接口：
 
-业务 API 尚未实现；文档中规划的 `GET /api/resources` 等接口属于 Phase 3 / Phase 6 / Phase 7 / Phase 8，
-`POST /api/auth/login` 属于 Phase 10。
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/health` | 非业务，启动与连通性验证 |
+| POST | `/api/auth/login` | 微信一键登录（双模式，未配凭证自动降级） |
+| GET | `/api/resources` | 资源列表，可选 `type` 筛选 |
+| GET | `/api/resources/{id}` | 资源详情（不存在时返回 `code:0 data:null`，由页面落空态） |
+| GET | `/api/resources/{id}/availability?date=` | 指定日期可用时间段（合成） |
+| POST | `/api/bookings` | 创建预约（需登录） |
+| GET | `/api/bookings/my` | 我的预约（需登录，预约详情复用它） |
+| DELETE | `/api/bookings/{id}` | 取消预约（需登录） |
 
-前端已按契约调用、当前由开发期数据源顶替的接口：
-- `GET /api/resources`（Phase 2）、`GET /api/resources/{id}`、`GET /api/resources/{id}/availability`（Phase 4）
-- `POST /api/auth/login`（Phase 5）
-- `POST /api/bookings`（Phase 6）
-- `GET /api/bookings/my`（Phase 7；预约详情也复用它，见 §10 第 10 条）
+统一约定（详见 `docs/05_api_contract.md`）：
+- 响应体恒为 `ApiResponse`：`{ code, message, data }`
+- **业务失败一律 HTTP 200**，语义放在 `code`；**只有未登录 / 登录态失效用 HTTP 401**。
+  这样前端 `request.ts` 只有一条判断路径，不必为每个接口记「哪种错是 4xx」
+- 错误码统一 `HTTP 状态码 × 1000`：`400001` 参数 / `400002` 非法时间 / `401001` 未登录 /
+  `401002` 登录失败 / `404001` 资源或预约不存在 / `409001` 时段冲突 / `500000` 服务端异常
+- 鉴权：`Authorization: Bearer <token>`。token 是 HMAC-SHA256 签名的**自包含**令牌
+  （三段式 `header.payload.signature`，Base64URL），不依赖 Redis 或会话表，
+  因此守住了「只有三张核心表」的约束；代价是**主动失效做不了**（只能等过期，默认 720 小时）
+- 身份由服务端从凭证解析，**入参不含 userId**，因此「只能看到 / 取消自己的预约」
+  是服务端边界，前端无从伪造
 
-- `DELETE /api/bookings/{id}`（Phase 8）
-
-技术设计 §3 规划的接口至此已**全部被前端调用**，后续阶段不应再新增接口。
-
-技术设计 §3 的接口清单里**没有** `GET /api/bookings/{id}`，Phase 7 刻意未扩充契约
-（预约详情复用 `/bookings/my` 再按 id 查找）。
-
-API 设计以：
-`docs/05_api_contract.md`
-为准；该文档尚未建立，在首次 API 实现前创建。
+验证记录（2026-09-16）：
+- `tools/api-test/api-phase10.js` —— 后端接口实测 **76/76 通过**
+  （含 8 条并发抢同一时段：7 条被唯一索引拦下并翻译为 `409001`，恰好 1 条成功）
+- `tools/e2e/e2e-real-backend.js` —— 小程序 ↔ 真实后端联通实测 **28/28 通过**
+  （反证：把 `CR_MOCK_MODE` 置 `empty` 后列表仍 8 条，证明数据只可能来自 HTTP；
+  并验证「HTTP 预置的预约出现在小程序列表里」与「取消后状态变 `CANCELLED`」）
 
 ## 10. Known Issues
 
@@ -674,15 +735,15 @@ API 设计以：
     - 这条与 Phase 6「提交失败分流」是同一条原则：只有网络类值得原样重试，
       业务失败要用「让用户换个做法」来响应。
 
-14. **Phase 9 的「真机测试」未做（开发者侧待补）**：
-    - `docs/04_development_plan.md` 的 Phase 9 清单里列了真机验证，但它需要开发者用
-      开发者工具「预览」扫码到自己的手机上，**AI 环境只能跑到开发者工具的模拟器**。
-    - 因此本项在开发计划与 §3 里都保持未勾选，**明确标注、不由测试脚本代称通过**
-      （`docs/AGENTS.md` §13「无法测试时必须明确说明，不得声称测试通过」）。
-    - 顺延到 Phase 11，或在 Phase 9 收尾时由开发者补做。真机重点关注两处：
-      安全区适配（`.cr-page` 底部的 `env(safe-area-inset-bottom)` 是否真的让开了手势条）
-      与下拉刷新的手感与动画收起。
-    - 这是 Phase 9 唯一的未完成项；其余九项均已通过端到端测试验证。
+14. ~~**Phase 9 的「真机测试」未做（开发者侧待补）**~~ → **已由开发者于 2026-09-16 完成**：
+    - 原先的状态：`docs/04_development_plan.md` 的 Phase 9 清单里列了真机验证，但它需要开发者用
+      开发者工具「预览」扫码到自己的手机上，**AI 环境只能跑到开发者工具的模拟器**，
+      因此当时保持未勾选并明确标注，不由测试脚本代称通过（`docs/AGENTS.md` §13）。
+    - 现状：开发者已亲自扫码在真机上验证核心流程，**未发现明显问题**。
+      开发计划与 §3 中的该项均已勾选。
+    - 保留记录的原因：真机与模拟器仍有差异（`baseUrl` 指向局域网 IP 而非 `127.0.0.1`、
+      `env(safe-area-inset-bottom)` 才真正生效、机型 `wx.*` API 版本差异），
+      这些在 Phase 11 的真实后端回归里继续覆盖。
 
 15. **Phase 9 的改动让 Phase 8 的一条断言过期（已修，属回归测试的正常收获）**：
     - Phase 9 把二次确认 Promise 化后，预约详情页的防重复从「请求中」（`canceling`）
@@ -694,6 +755,34 @@ API 设计以：
       断言用户可见的结论（次数、条数）才稳定。
     - 说明：这类失败要**先分清「产品坏了」还是「断言过期了」**再动手；
       Phase 9 改动前先跑一遍回归，正是为了把这种过期断言当场暴露出来。
+
+16. **真实微信 `code2session` 调用未实测（Phase 10 遗留）**：
+    - 本机没有配置微信 AppSecret，`WeChatClient.isConfigured()` 全程返回 `false`，
+      联通实测走的都是**降级路径**（由 code 派生本地用户映射）。
+    - 因此「真实 `code2session` 返回 `openid` / `session_key` 后与 `user` 表对得上」
+      这条链路**只有代码、没有实测证据**。换到有凭据的环境时它会第一次被执行。
+    - 相比「假报测试通过」，这里的做法是把未覆盖的部分显式写出来（`docs/AGENTS.md` §13）。
+
+17. **模拟器自动化会话会「路由过渡冻结」（测试环境现象，非产品缺陷）**：
+    - 现象：跨脚本存活的自动化会话在若干次导航后，`wx.reLaunch` 的 `success`/`fail`
+      回调**一直停在 `pending`**，页面栈不再变化（实测停在
+      `[index, resource-list, resource-detail, login]`）。此时 `mp.navigateTo()` 会超时，
+      后续断言全部退化成 null。
+    - 成因：上一轮脚本把**登录页**留在页面栈里，且它的「登录成功后延迟返回」
+      （`setTimeout(() => navigateBack(delta:1), BACK_DELAY)`）仍在飞——迟到的 `navigateBack`
+      弹掉的是**当时新压入的页面**，于是栈顶反复回到登录页。
+    - 解法：`cli.bat close` 后重跑 `tools/e2e/start-automation.js` 重建会话；
+      脚本侧必须**等到登录页自己离开再导航**（`e2e-real-backend.js` 的 C4 步骤）。
+    - 验证脚本已把这一状态**显式识别并抛出可执行的修复提示**（`resetToHome()` 里的
+      `probeReLaunch()`），不再退化成一堆难以定位的 null 断言。
+
+18. **登录 token 无法主动失效（Phase 10 的有意取舍）**：
+    - token 是 HMAC 签名自包含的，服务端不存会话，因此**退出登录只清客户端本地态**，
+      已签发的 token 在过期（默认 720 小时）前仍然有效。
+    - 这是为了守住「只有三张核心表、不引入 Redis」的约束而付的代价。
+      若将来需要「改密码即失效」这类能力，需引入会话表或黑名单，属 Phase 12 之后的加固项。
+    - 另：`CR_TOKEN_SECRET` 未配置时每次启动随机生成密钥并打印警告，
+      **此时重启后端会让既有登录态失效**。长期联调请注入固定值。
 
 ## 11. Important Decisions
 
@@ -709,14 +798,14 @@ API 设计以：
 - REST API
 - 模块化单体后端
 
-文档体系（Phase 0 确立）：
+文档体系（Phase 0 确立，Phase 10 补齐 03 / 05）：
 ```text
 docs/
 ├── 01_requirements.md        # 需求
 ├── 02_technical_design.md    # 技术设计、规范与约束
 ├── 03_database_design.md     # 数据库设计（Phase 10 创建）
 ├── 04_development_plan.md    # 开发阶段
-├── 05_api_contract.md        # API 契约（首次实现 API 前创建）
+├── 05_api_contract.md        # API 契约（Phase 10 创建）
 ├── AGENTS.md                 # AI 协同开发规范
 └── PROJECT_MEMORY.md         # 当前状态（本文件）
 ```
@@ -742,6 +831,12 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
   使页面在后端 API（Phase 10）落地前即可验证 success / empty / error 三种展示、
   登录 / 登录失败两条路径，以及创建预约的成功与六种失败路径。
 - 该开关只决定数据来源，页面与组件代码不感知；后端联调时改为 `false` 即切到真实接口。
+- **Phase 10 的状态**：后端 API 已全部落地，但该开关**按约定仍保持 `true`**，
+  目的是让九套 mock 回归不依赖后端进程是否在跑。**正式切换属 Phase 11**。
+  小程序 ↔ 真实后端的联通另行验证：把开关**人工**置为 `false` 后跑
+  `tools/e2e/e2e-real-backend.js`（跑完改回 `true`）。
+  该脚本还会把 `CR_MOCK_MODE` 置成 `empty` 来**反证**数据来自后端——
+  mock 被明确要求返回空，列表却仍有 8 条，这比「看到数据就算通」强得多。
 - 五个模式存储键供调试与端到端测试注入，属开发期机制，联调前应连同开关一并移除：
   - `CR_MOCK_MODE`（`success` | `empty` | `error`）：作用于资源列表与资源详情，
     `empty` 在详情页的含义是「该资源不存在」
@@ -811,6 +906,39 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
   （`padding: …; padding-bottom: calc(… + env(safe-area-inset-bottom, 0px))`）。
   合成一条时，旧机型不支持 `env()` 会让整条 `calc` 失效，下内边距反而变成 0。
 
+已定决策（Phase 10，均由开发者在动手前拍板）：
+- **微信登录用「双模式 + 自动降级」**：配了 `CR_WECHAT_APPID` / `CR_WECHAT_SECRET`
+  就走真实 `code2session`，否则由 code 派生本地用户映射（非 `dev:` 开头的 code 统一映射到
+  固定开发用户 `dev-user`）。**同一份代码两条路径**，换环境不需要改开关，
+  也就不会出现「上生产忘了翻开关」这种事。
+- **登录 token 用 HMAC-SHA256 签名的自包含令牌**，不引入 Redis、不加会话表。
+  理由是要守住「只有三张核心表」的约束；代价是主动失效做不了（见 §10 第 18 条）。
+- **`USE_MOCK_DATA` 在 Phase 10 保持 `true`，Phase 11 再切 `false`**。
+  理由：九套 mock 回归因此**不依赖后端进程是否在跑**，Phase 10 的验证可以分两条独立链路做
+  （后端接口实测 + 联通实测各自临时切换），出了问题能立刻分清是哪一侧。
+- **业务失败一律 HTTP 200，只有未登录/登录态失效用 HTTP 401**。
+  理由：前端 `request.ts` 只需一条判断路径，不必为每个接口记「哪种错是 4xx」；
+  401 单独出来是因为它触发的动作（清本地态 + 引导重新登录）与其他业务失败完全不同。
+- **`GET /api/resources/{id}` 资源不存在时返回 `code:0 data:null`**，而不是 `404001`。
+  理由：对页面而言「资源不存在」是一种正常的展示结果（落空态），不是错误分支；
+  用错误码承载会让页面多一条无意义的分支。注意这与 `GET /api/bookings/my` 里的
+  「取消查不到」不同——那里用户点的是一个自己以为存在的预约，必须给错误提示。
+- **预约一致性由数据库唯一索引兜底，而不是只靠 Service 判断**：
+  Service 先查一次**只为给出友好文案**（「该时段已被预约」），真正的并发防线是
+  `active_slot_key` 的唯一索引（8 条并发实测：7 条被拦下并翻译成 `409001`，恰好 1 条成功）。
+  若只靠 Service 的「查了再写」，两个请求会在查询与写入之间穿插过去。
+- **取消预约只改 `status`、绝不删行**：预约记录是用户的历史凭证，
+  删行会让「我的预约」里那条凭空消失，用户无法区分「我取消了」与「系统把它弄丢了」。
+- **可用时间段是合成出来的、不入库**：`resource.open_slots` 生成骨架 + booking 叠加 + 当前时间标
+  `DISABLED`。因此取消预约**不需要任何清理动作**，时段自动恢复可用；
+  也让「某天某时段是否可约」只有一处真源（booking 表），不存在两份数据不同步的问题。
+- **建表与种子数据用幂等 SQL 脚本（`spring.sql.init`），不用 Hibernate 的 `ddl-auto`**：
+  生成列与唯一索引这类结构 Hibernate 表达不好，且 `ddl-auto` 会在生产上改结构。
+  `ddl-auto: none` 让 Hibernate 既不建表也不校验。
+- **口令与凭据一律环境变量注入，`application.yml` 里默认留空**：
+  这是公开仓库，写死默认口令等于把口令公开；代价是本地启动必须显式注入
+  `CR_DB_PASSWORD`，否则启动即 `Access denied`。
+
 当前不使用：
 - Redis
 - MQ
@@ -844,14 +972,17 @@ Phase 0 全部提交均按此规范命名，远端 `main` 与本地一致。
 ## 14. Last Updated
 
 更新时间：2026-09-16  
-最后完成任务：Phase 9 小程序体验优化完成并通过端到端测试（真实开发者工具中 69/69 通过，
-Phase 1 ~ Phase 8 回归 36/36、47/47、65/65、81/81、64/64、61/61、63/63、73/73，九套合计 559 项）；
-新增 `utils/feedback.ts`（toast 三态统一 + `confirm()` Promise 化 + 危险色）与
-`store/preference.ts`（最近筛选条件缓存，优先级 URL 参数 > 缓存 > 空），
-把 6 个页面里散落的 `wx.showToast` / `wx.showModal` 全部收敛到反馈层；
-预约详情页新增 `confirming`，与 `canceling` 分属「等待确认」「请求中」两个阶段各自防重复；
-「我的预约」补下拉刷新（只重拉数据、不重置页签，未登录等异常路径同样收起刷新动画）；
-`.cr-page` 底部改两段式 `env(safe-area-inset-bottom)`、全局 `backgroundTextStyle` 改 `dark`；
-静态检查 `tsc --noEmit` 0 错误。
-**真机测试未做**：需开发者用「预览」扫码，AI 环境只能跑到模拟器，见 §10 第 14 条（Phase 9 唯一未完成项）  
+最后完成任务：**Phase 10 后端与数据层整理**。后端从「只有健康检查」补成完整业务 API：
+`common/`（统一响应体 + 错误码 + 全局异常处理）、`security/`（HMAC 自包含令牌 + 拦截器 +
+`@CurrentUser` 解析器）、`entity` / `repository` / `dto` / `service` / `controller` 全套；
+MySQL `campusreserve` 库落地 `user` / `resource` / `booking` 三表（幂等建表脚本 + 8 条种子资源），
+`booking.active_slot_key` 用**生成列 + 唯一索引**在数据库层兜住并发；
+新增 `docs/03_database_design.md` 与 `docs/05_api_contract.md`。
+验证：后端接口实测 **76/76**（`tools/api-test/api-phase10.js`，含 8 条并发抢同一时段）、
+小程序 ↔ 真实后端联通实测 **28/28**（`tools/e2e/e2e-real-backend.js`，含真实 `wx.login` →
+`POST /api/auth/login` → 我的预约 → 取消写回 CANCELLED），
+九套 mock 回归 559 项在 `USE_MOCK_DATA` 保持 `true` 的前提下继续全绿。
+Phase 9 的**真机测试已由开发者于本日完成**，未发现明显问题。
+遗留：真实微信 `code2session` 未实测（本机无 AppSecret，全程走降级路径）；
+登录 token 无法主动失效（有意取舍）——均见 §10 第 16 / 18 条  
 更新者：Developer（AI 协同）
