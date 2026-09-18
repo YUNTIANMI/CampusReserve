@@ -1,6 +1,11 @@
 server:
-  # 端口可由环境变量覆盖（CR_SERVER_PORT），便于与前端 services/config.ts 的地址对齐
-  port: ${CR_SERVER_PORT:8080}
+  # 端口可由环境变量覆盖（CR_SERVER_PORT），便于与前端 services/config.ts 的地址对齐。
+  #
+  # 默认 **8088** 而不是 8080：本机 Docker 里跑着 CodeAtlas 等其他项目，8080 已被
+  # codeatlas-backend 容器占用（0.0.0.0:8080->8080）。沿用 8080 有两个后果——
+  # 本服务启动时端口冲突直接失败，或前端请求被别的后端接走（实测它返回自己的
+  # 401「未认证或 Token 失效」，页面上看起来像登录坏了，实际跟本项目无关）。
+  port: ${CR_SERVER_PORT:8088}
 
 spring:
   application:

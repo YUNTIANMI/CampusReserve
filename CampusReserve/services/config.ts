@@ -8,12 +8,14 @@
  * 1. 开发者工具：需在「详情 → 本地设置」勾选「不校验合法域名、web-view（业务域名）、
  *    TLS 版本以及 HTTPS 证书」，否则 http://127.0.0.1 会被拦截。
  * 2. 真机预览：127.0.0.1 指向手机自身，必须改为电脑的局域网 IP，例如
- *    http://192.168.1.10:8080/api，并保证手机与电脑在同一局域网。
- * 3. 后端默认端口 8080，见 backend/src/main/resources/application.yml。
+ *    http://192.168.1.10:8088/api，并保证手机与电脑在同一局域网。
+ * 3. 后端默认端口 **8088**（不是 8080）——8080 已被本机 Docker 里的其他项目容器占用，
+ *    沿用它会端口冲突，或让请求被别的后端接走（日志里会出现与本项目无关的错误文案）。
+ *    以 backend/src/main/resources/application.yml 为准。
  */
 
 /** 后端 API 根地址（末尾不带斜杠，各接口以 / 开头拼接） */
-export const API_BASE_URL = 'http://127.0.0.1:8080/api'
+export const API_BASE_URL = 'http://127.0.0.1:8088/api'
 
 /** 请求超时时间（毫秒） */
 export const REQUEST_TIMEOUT = 10000
