@@ -7,12 +7,12 @@
  *
  * 用法：
  *   node ./e2e-phase11-helper.js clean                # 清理 dev-user 的全部预约
- *   node ./e2e-phase11-helper.js clean http://127.0.0.1:8080/api
+ *   node ./e2e-phase11-helper.js clean http://127.0.0.1:8088/api
  *
  * 与 cr-preset-helper.js（临时目录、不入库）的区别：本脚本属于 Phase 11 的正式交付物，
  * 需要随仓库走，供后续回归复用。清理只动 dev-user 自己的记录，不碰其他用户。
  */
-const BASE = process.argv[3] || 'http://127.0.0.1:8080/api'
+const BASE = process.argv[3] || 'http://127.0.0.1:8088/api'
 const action = process.argv[2] || 'clean'
 
 /** 与小程序 wx.login 同一条降级路径：非 dev: 开头 → 固定开发用户 dev-user */

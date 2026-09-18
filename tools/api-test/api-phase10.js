@@ -10,8 +10,8 @@
  * 契约改了要同步改这里。
  *
  * 用法：
- *   node ./api-phase10.js                                  # 默认 http://127.0.0.1:8080/api
- *   node ./api-phase10.js http://127.0.0.1:8080/api
+ *   node ./api-phase10.js                                  # 默认 http://127.0.0.1:8088/api
+ *   node ./api-phase10.js http://127.0.0.1:8088/api
  *
  * 前提：后端已连上 MySQL 启动（见 backend/README 或 docs/PROJECT_MEMORY.md §7）。
  *
@@ -24,7 +24,7 @@
  * 3. **用远期日期**（+40 天）做时段断言，避免与人工调试时留下的记录撞车。
  */
 
-const BASE = process.argv[2] || 'http://127.0.0.1:8080/api'
+const BASE = process.argv[2] || 'http://127.0.0.1:8088/api'
 
 /** 断言计数 */
 let passed = 0

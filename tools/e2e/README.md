@@ -57,7 +57,8 @@ node ./e2e-phase11-helper.js clean                             # 清理 phase11 
 | `../api-test/api-phase10.js` | 后端接口本身是对的（不经过小程序） | 真实后端 + MySQL |
 
 前置条件（缺一不可）：
-1. 后端已连 MySQL 启动（默认 `http://127.0.0.1:8080`），启动时需注入 `CR_DB_PASSWORD`
+1. 后端已连 MySQL 启动（默认 `http://127.0.0.1:8088`；**8080 已被本机 Docker 里其他项目的容器占用，不要用**），
+   启动时需注入 `CR_DB_PASSWORD`
    （公开仓库不写口令，缺了会直接 `Access denied ... (using password: NO)`）
 2. `CampusReserve/services/config.ts` 的 `USE_MOCK_DATA` 置为 **`false`**
    ——**Phase 11 起这是正式状态**（小程序跑真实后端），不再是临时切换。

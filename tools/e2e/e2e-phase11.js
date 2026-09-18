@@ -27,7 +27,7 @@
  *     前端 error 态 + 重试入口已由 mock 回归覆盖；本脚本不做进程级编排。
  *
  * 前置条件（缺一不可）：
- *   1) 后端已连 MySQL 启动（默认 http://127.0.0.1:8080）
+ *   1) 后端已连 MySQL 启动（默认 http://127.0.0.1:8088）
  *   2) CampusReserve/services/config.ts 的 `USE_MOCK_DATA` 已置为 **false**
  *   3) 开发者工具「详情 → 本地设置」勾选「不校验合法域名…」
  *   4) 自动化模式已启动：cli.bat auto --project "…\CampusReserve" --auto-port 9420
