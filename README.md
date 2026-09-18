@@ -135,7 +135,7 @@ $env:CR_TOKEN_SECRET = '***'         # 可选，HMAC 签名密钥（缺省随机
 启动后验证：
 
 ```bash
-curl http://localhost:8080/api/health
+curl http://localhost:8088/api/health
 # {"code":0,"message":"success","data":{"status":"UP","service":"campusreserve-backend"}}
 ```
 

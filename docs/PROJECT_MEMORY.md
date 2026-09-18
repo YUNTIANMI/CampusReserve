@@ -499,7 +499,7 @@ cd backend
 # 数据源口令必须注入（公开仓库不写口令），否则启动即 Access denied
 $env:CR_DB_PASSWORD = '***'          # PowerShell
 ./mvnw spring-boot:run
-# GET http://localhost:8080/api/health
+# GET http://localhost:8088/api/health
 # {"code":0,"message":"success","data":{"status":"UP","service":"campusreserve-backend"}}
 ```
 
@@ -597,7 +597,7 @@ $env:CR_DB_PASSWORD = '***'          # PowerShell
    当前 AI 开发环境注入了 `SERVER__PORT=4733` 与 `SERVER__HOST=127.0.0.1`，
    Spring Boot 宽松绑定会将其识别为 `server.port` / `server.host`，**优先级高于 `application.yml`**，
    导致后端启动在 4733 端口并仅监听本机回环地址（且 4733 已被宿主进程占用）。
-   在沙箱内验证后端时，需先清除这两个环境变量，或显式传 `--server.port=8080` / `--server.address=0.0.0.0`。
+   在沙箱内验证后端时，需先清除这两个环境变量，或显式传 `--server.port=8088` / `--server.address=0.0.0.0`。
    开发者在自己的终端中直接运行不受影响。
 
 3. 本机 3306 实例不可用（见 §8），后续任何数据库操作一律使用 3308 实例。

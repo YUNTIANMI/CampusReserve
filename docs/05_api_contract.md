@@ -23,7 +23,8 @@
 
 ## 1. 通用约定
 
-- 根地址：`http://<host>:8080/api`（小程序端唯一来源是 `CampusReserve/services/config.ts` 的 `API_BASE_URL`）
+- 根地址：`http://<host>:8088/api`（小程序端唯一来源是 `CampusReserve/services/config.ts` 的 `API_BASE_URL`）
+  —— 端口是 **8088 而非 8080**：8080 已被本机 Docker 里其他项目的容器占用，见 `backend/src/main/resources/application.yml`
 - 编码：UTF-8；请求与响应均为 `application/json`
 - 字段命名：小驼峰（`resourceId` / `startTime`）
 - 时间格式：日期 `YYYY-MM-DD`、时刻 `HH:mm`、时间戳 `YYYY-MM-DD HH:mm:ss`
@@ -324,6 +325,6 @@ Service 先查一次以给出友好文案，即便并发下同时通过检查，
 
 ```bash
 cd tools/api-test
-node ./api-phase10.js                # 默认 http://127.0.0.1:8080/api
-node ./api-phase10.js http://127.0.0.1:8080/api
+node ./api-phase10.js                # 默认 http://127.0.0.1:8088/api
+node ./api-phase10.js http://127.0.0.1:8088/api
 ```
